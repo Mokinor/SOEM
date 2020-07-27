@@ -452,7 +452,7 @@ int main(int argc, char *argv[])
          }
       }
       /* start tool */
-      eepromtool(argv[1],slave,mode,argv[4]);
+      eepromtool("rpcap://\\Device\\NPF_{E1DD6576-A36A-43BD-88DA-60651444FD1F}",slave,mode,argv[4]);
    }
    else
    {

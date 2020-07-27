@@ -630,7 +630,7 @@ int main(int argc, char *argv[])
       if ((argc > 2) && (strncmp(argv[2], "-map", sizeof("-map")) == 0)) printMAP = TRUE;
       /* start slaveinfo */
       strcpy(ifbuf, argv[1]);
-      slaveinfo(ifbuf);
+      slaveinfo("rpcap://\\Device\\NPF_{E1DD6576-A36A-43BD-88DA-60651444FD1F}");
    }
    else
    {

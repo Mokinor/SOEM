@@ -1,5 +1,5 @@
 /** \file
- * \brief Example code for Simple Open EtherCAT master
+ * \brief Application code for SOEM/Ethercat test bench
  *
  */
 
@@ -34,7 +34,7 @@ void simpletest(char *ifname)                                     //ifname name 
     needlf = FALSE;
     inOP = FALSE;
 
-   printf("Starting simple test\n");
+   printf("Starting... \n");
 
    /* initialise SOEM, bind socket to ifname */
    if (ec_init(ifname))
@@ -47,14 +47,16 @@ void simpletest(char *ifname)                                     //ifname name 
       {
          printf("%d slaves found and configured.\n",ec_slavecount);
 
-         ec_config_map(&IOmap);                                      //configuration of the IO Map of devices
+         ec_config_map(&IOmap);                                         //configuration of the IO Map of devices
 
-         ec_configdc();                                            // ????
+         ec_configdc();                                                 // config distributed clocks
 
-         printf("Slaves mapped, state to SAFE_OP.\n");
+         printf("Slaves mapped, state to SAFE_OP.\n");                  
 
          /* wait for all slaves to reach SAFE_OP state */
          ec_statecheck(0, EC_STATE_SAFE_OP,  EC_TIMEOUTSTATE * 4); 
+
+        /* Value of input and output loops (limited to 8)*/
 
          oloop = ec_slave[0].Obytes;
          if ((oloop == 0) && (ec_slave[0].Obits > 0)) oloop = 1;
@@ -63,16 +65,18 @@ void simpletest(char *ifname)                                     //ifname name 
          if ((iloop == 0) && (ec_slave[0].Ibits > 0)) iloop = 1;
          if (iloop > 8) iloop = 8;
 
+        /* Print number of segments/branches in network*/
+
          printf("segments : %d : %d %d %d %d\n",ec_group[0].nsegments ,ec_group[0].IOsegment[0],ec_group[0].IOsegment[1],ec_group[0].IOsegment[2],ec_group[0].IOsegment[3]);
 
          printf("Request operational state for all slaves\n");
-         expectedWKC = (ec_group[0].outputsWKC * 2) + ec_group[0].inputsWKC;   //2*outputs + inputs ? si 2 slaves -> 2 outputs *2 + 2inputs
+         expectedWKC = (ec_group[0].outputsWKC * 2) + ec_group[0].inputsWKC;   // wkc = 2*outputs + inputs ex : si 2 slaves -> 2 outputs *2 + 2inputs = 6
          printf("Calculated workcounter %d\n", expectedWKC);
          ec_slave[0].state = EC_STATE_OPERATIONAL;
          /* send one valid process data to make outputs in slaves happy*/
          ec_send_processdata();                                                // pas pour les rendre happy (passe les slaves de l'etat safe-op a op)
-         int TimeOut = ec_receive_processdata(EC_TIMEOUTRET);
-         printf("TimeoutRet : %d\n",TimeOut);
+         int TimeOut = ec_receive_processdata(EC_TIMEOUTRET);                  // def wkc de transmission de PDO/PDI
+         printf("TimeoutRet : %d\n",TimeOut);                                   
          /* request OP state for all slaves */
          ec_writestate(0);
          chk = 200;
@@ -84,12 +88,14 @@ void simpletest(char *ifname)                                     //ifname name 
             ec_statecheck(0, EC_STATE_OPERATIONAL, 50000);
          }
          while (chk-- && (ec_slave[0].state != EC_STATE_OPERATIONAL));
+
          if (ec_slave[0].state == EC_STATE_OPERATIONAL )
          {
             printf("Operational state reached for all slaves.\n");
-            inOP = TRUE;
+            inOP = TRUE;                                                       //Bool for OP status
                 /* cyclic loop */
-            int64_t timeOfStart = ec_DCtime; // temps au départ de la com (eviter les temps inutilisables)
+            int64_t startTime = ec_DCtime;                                   //enreg temps au départ de la com (eviter les temps inutilisables) 
+                                                                             // reférence prise sur le temps affiché par les DCs
             for(i = 1; i <= 5000; i++)
             {
                ec_send_processdata();
@@ -109,9 +115,10 @@ void simpletest(char *ifname)                                     //ifname name 
                         {
                             printf(" %2.2x", *(ec_slave[0].inputs + j));
                         }
-                        printf(" T:%"PRId64"",ec_DCtime-timeOfStart);
-                        printf(" Cycle time estimate : %I64d\n\f", (ec_DCtime-timeOfStart)/i);
+                        printf(" T(ns):%"PRId64"",ec_DCtime-startTime);
+                        printf(" Cycle time estimate (ns) : %I64d\r", (ec_DCtime-startTime)/i);
                         needlf = TRUE;
+                        fflush(stdout);
                     }
                     osal_usleep(5000);
 
@@ -140,7 +147,7 @@ void simpletest(char *ifname)                                     //ifname name 
         {
             printf("No slaves found!\n");
         }
-        printf("End simple test, close socket\n");
+        printf("End SOEM close socket\n");
         /* stop SOEM, close socket */
         ec_close();
     }
@@ -282,23 +289,18 @@ int main(int argc, char *argv[])
 	
 	
 
-   printf("SOEM (Simple Open EtherCAT Master)\nSimple test\n");
+    printf("SOEM (Simple Open EtherCAT Master)\nTest app\n");
 
-   if (argc > 1)
-   {
-      /* create thread to handle slave error handling in OP */
-      // pthread_create( &thread1, NULL, (void *) &ecatcheck, (void*) &ctime);
-      osal_thread_create(&thread1, 128000, &ecatcheck, (void*) &ctime);
-      /* start cyclic part */
-      simpletest(d->name);
-   }
-   else
-   {
-      printf("Usage: simple_test ifname1\nifname = eth0 for example\n");
-   }
 
-   printf("End program\n");
-   return (0);
+    /* create thread to handle slave error handling in OP */
+    // pthread_create( &thread1, NULL, (void *) &ecatcheck, (void*) &ctime);
+    osal_thread_create(&thread1, 128000, &ecatcheck, (void*) &ctime);
+    /* start cyclic part */
+    simpletest(d->name);
+
+
+    printf("End program\n");
+    return (0);
 }
 
 

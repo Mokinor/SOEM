@@ -23,6 +23,13 @@ boolean needlf;
 volatile int wkc;
 boolean inOP;
 uint8 currentgroup = 0;
+typedef struct PACKED
+{
+        int8      outVal1;
+        int8      outVal2;
+} outVal_t;
+
+outVal_t *outVal;
 
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
 
@@ -40,16 +47,27 @@ void simpletest(char *ifname)                                     //ifname name 
    if (ec_init(ifname))
    {
       printf("ec_init on %s succeeded.\n",ifname);
+
       /* find and auto-config slaves */
 
 
        if ( ec_config_init(FALSE) > 0 )
       {
+
          printf("%d slaves found and configured.\n",ec_slavecount);
 
          ec_config_map(&IOmap);                                         //configuration of the IO Map of devices
 
          ec_configdc();                                                 // config distributed clocks
+
+         //printf("Output address : %x\n",  (ec_slave[1].outputs+1));
+
+          /* TODO config  PDO */
+         for(i= 1; i<=ec_slavecount; i++)
+         {
+            outVal = (outVal_t*) ec_slave[i].outputs;
+            outVal->outVal2 = 0x15;
+         }
 
          printf("Slaves mapped, state to SAFE_OP.\n");                  
 
@@ -96,7 +114,7 @@ void simpletest(char *ifname)                                     //ifname name 
                 /* cyclic loop */
             int64_t startTime = ec_DCtime;                                   //enreg temps au départ de la com (eviter les temps inutilisables) 
                                                                              // reférence prise sur le temps affiché par les DCs
-            for(i = 1; i <= 5000; i++)
+            for(i = 1; i <= 500; i++)
             {
                ec_send_processdata();
                wkc = ec_receive_processdata(EC_TIMEOUTRET);
@@ -107,16 +125,19 @@ void simpletest(char *ifname)                                     //ifname name 
 
                         for(j = 0 ; j < oloop; j++)
                         {
-                            printf(" %2.2x", *(ec_slave[0].outputs + j));
+                            printf(" %2.2x", *(ec_slave[0].outputs + j)); 
+                            //printf(" %2.2x", (uint8)(ec_slave[1].outputs));    //printing outputs ?
                         }
 
                         printf(" I:");
                         for(j = 0 ; j < iloop; j++)
                         {
-                            printf(" %2.2x", *(ec_slave[0].inputs + j));
+                            printf(" %2.2x", *(ec_slave[0].inputs + j));      //printing inputs ?
                         }
                         printf(" T(ns):%"PRId64"",ec_DCtime-startTime);
                         printf(" Cycle time estimate (ns) : %I64d\r", (ec_DCtime-startTime)/i);
+
+
                         needlf = TRUE;
                         fflush(stdout);
                     }
@@ -156,6 +177,8 @@ void simpletest(char *ifname)                                     //ifname name 
         printf("No socket connection on %s\nExecute as root\n",ifname);
     }
 }
+
+/* OS abstracted thread to manage errors */
 
 OSAL_THREAD_FUNC ecatcheck( void *ptr )
 {
@@ -236,7 +259,7 @@ OSAL_THREAD_FUNC ecatcheck( void *ptr )
 
 int main(int argc, char *argv[])
 {
-		pcap_if_t *alldevs;
+	pcap_if_t *alldevs;
 	pcap_if_t *d;
 	int inum;
 	int i=0;
@@ -273,6 +296,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 	
+   /* ask for user input*/
 	printf("Enter the interface number (1-%d):",i);
 	scanf_s("%d", &inum);
 	
@@ -304,7 +328,7 @@ int main(int argc, char *argv[])
 }
 
 
-/* Callback function invoked by libpcap for every incoming packet */
+/* Callback function invoked by libpcap for every incoming packet (not used ??)*/
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data)
 {
 	struct tm ltime;

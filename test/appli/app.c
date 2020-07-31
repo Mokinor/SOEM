@@ -64,8 +64,10 @@ void simpletest(char *ifname) //ifname name of interface
 			for (i = 1; i <= ec_slavecount; i++)
 			{
 				outVal = (outVal_t *)ec_slave[i].outputs;
-				outVal->outVal2 = 0x30;
+				outVal->outVal2 = 0x15151515;
 			}
+
+			printf("Adresse outputs : %p\n", ec_slave[1].outputs);
 
 			printf("Slaves mapped, state to SAFE_OP.\n");
 
@@ -75,11 +77,14 @@ void simpletest(char *ifname) //ifname name of interface
 			/* Value of input and output loops (limited to 8)*/
 
 			oloop = ec_slave[0].Obytes;
+			printf("oloop : %d\n", oloop);
 			if ((oloop == 0) && (ec_slave[0].Obits > 0))
 				oloop = 1;
 			if (oloop > 8)
 				oloop = 8;
+				
 			iloop = ec_slave[0].Ibytes;
+			printf("iloop : %d\n", iloop);
 			if ((iloop == 0) && (ec_slave[0].Ibits > 0))
 				iloop = 1;
 			if (iloop > 8)
@@ -115,7 +120,7 @@ void simpletest(char *ifname) //ifname name of interface
 				/* cyclic loop */
 				int64_t startTime = ec_DCtime; //enreg temps au départ de la com (eviter les temps inutilisables)
 											   // reférence prise sur le temps affiché par les DCs
-				for (i = 1; i <= 500; i++)
+				for (i = 1; i <= 2000; i++)
 				{
 					ec_send_processdata();
 					wkc = ec_receive_processdata(EC_TIMEOUTRET);
@@ -124,26 +129,25 @@ void simpletest(char *ifname) //ifname name of interface
 					{
 						for (int n = 1; n <= ec_slavecount; n++)
 						{
-							outVal = (outVal_t *)ec_slave[n].outputs;
-							outVal->outVal2 = i;
+							outVal = (outVal_t *)ec_slave[n].inputs;
+							outVal->outVal2 = 0x30303030;
 						}
 
 						printf("Processdata cycle %4d, WKC %d , O:", i, wkc);
 
-						for (j = 0; j < oloop; j++)
+						for (j = 4; j < oloop*2; j++)
 						{
-							printf(" %2.2x", *(ec_slave[0].outputs + j));
-							//printf(" %2.2x", (uint8)(ec_slave[1].outputs));    //printing outputs ?
+							printf(" %2.2x", *(ec_slave[0].outputs + j));  //printing outputs ?
 						}
 
 						printf(" I:");
-						for (j = 0; j < iloop; j++)
+						for (j = 4; j < iloop*1.5; j++)
 						{
 							printf(" %2.2x", *(ec_slave[0].inputs + j)); //printing inputs ?
 						}
-						printf(" T(ns):%" PRId64 "", ec_DCtime - startTime);
-						printf(" Cycle time estimate (ns) : %I64d\r", (ec_DCtime - startTime) / i);
-
+						//printf(" T(ns):%" PRId64 "", ec_DCtime - startTime);
+						//printf(" Cycle time estimate (ns) : %I64d\r", (ec_DCtime - startTime) / i);
+						printf("\r");
 						needlf = TRUE;
 						fflush(stdout);
 					}
@@ -197,7 +201,7 @@ OSAL_THREAD_FUNC ecatcheck(void *ptr)
 			if (needlf)
 			{
 				needlf = FALSE;
-				printf("\n");
+
 			}
 			/* one ore more slaves are not responding */
 			ec_group[currentgroup].docheckstate = FALSE;

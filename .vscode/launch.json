@@ -8,7 +8,7 @@
             "name": "cl.exe - Build and debug active file",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "..\\build\\${fileDirname}\\${fileBasenameNoExtension}.exe",
+            "program": "C:\\Users\\clearsy\\Desktop\\SOE\\SOEM\\build\\test\\appli\\Debug\\app.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

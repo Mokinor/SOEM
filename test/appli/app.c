@@ -3,8 +3,8 @@
  *
  */
 
-/* Merging of Npcap library examples with SOEM library
-Npcap discovers the compatible interfaces and SOEM runs on one of them.*/
+ /* Merging of Npcap library examples with SOEM library
+ Npcap discovers the compatible interfaces and SOEM runs on one of them.*/
 
 #include <stdio.h>
 #include <string.h>
@@ -23,16 +23,40 @@ boolean needlf;
 volatile int wkc;
 boolean inOP;
 uint8 currentgroup = 0;
-typedef struct PACKED
-{
-	int32 outVal1;
-	int32 outVal2;
-} outVal_t;
-
-outVal_t *outVal;
+int32 outData,inData;
 
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
 
+int32 inPDO32(int slave)
+{
+	int32 res;
+	uint32_t b0,b1,b2,b3;
+	int slaveOffset = 0;
+	if(slave > 1)
+	{
+		slaveOffset = slave*4;
+	}
+	b0 = ec_slave[0].inputs[3 + slaveOffset];
+    b1 = ec_slave[0].inputs[2 + slaveOffset];
+    b2 = ec_slave[0].inputs[1 + slaveOffset];
+    b3 = ec_slave[0].inputs[0 + slaveOffset];
+
+	res = b0 | b1 | b2 | b3 ;
+	return res;
+}
+
+void outPDO32(int slave, uint32_t data)
+{
+	int slaveOffset = 0;
+	if(slave > 1)
+	{
+		slaveOffset = slave*4;
+	}
+	for (int i = 0 + slaveOffset; i < 3 + slaveOffset ;i++)
+	{
+		ec_slave[0].outputs[i]= (uint8_t)(outData >> (8*i));
+	}
+}
 // Simple test from SOEM library (calls all the useful functions)
 void simpletest(char *ifname) //ifname name of interface
 {
@@ -58,17 +82,6 @@ void simpletest(char *ifname) //ifname name of interface
 
 			ec_configdc(); // config distributed clocks
 
-			//printf("Output address : %x\n",  (ec_slave[1].outputs+1));
-
-			/* TODO config  PDO */
-			for (i = 1; i <= ec_slavecount; i++)
-			{
-				outVal = (outVal_t *)ec_slave[i].outputs;
-				outVal->outVal2 = 0x15151515;
-			}
-
-			printf("Adresse outputs : %p\n", ec_slave[1].outputs);
-
 			printf("Slaves mapped, state to SAFE_OP.\n");
 
 			/* wait for all slaves to reach SAFE_OP state */
@@ -82,7 +95,7 @@ void simpletest(char *ifname) //ifname name of interface
 				oloop = 1;
 			if (oloop > 8)
 				oloop = 8;
-				
+
 			iloop = ec_slave[0].Ibytes;
 			printf("iloop : %d\n", iloop);
 			if ((iloop == 0) && (ec_slave[0].Ibits > 0))
@@ -105,6 +118,8 @@ void simpletest(char *ifname) //ifname name of interface
 			/* request OP state for all slaves */
 			ec_writestate(0);
 			chk = 200;
+
+
 			/* wait for all slaves to reach OP state */
 			do
 			{
@@ -113,6 +128,7 @@ void simpletest(char *ifname) //ifname name of interface
 				ec_statecheck(0, EC_STATE_OPERATIONAL, 50000);
 			} while (chk-- && (ec_slave[0].state != EC_STATE_OPERATIONAL));
 
+
 			if (ec_slave[0].state == EC_STATE_OPERATIONAL)
 			{
 				printf("Operational state reached for all slaves.\n");
@@ -120,33 +136,37 @@ void simpletest(char *ifname) //ifname name of interface
 				/* cyclic loop */
 				int64_t startTime = ec_DCtime; //enreg temps au départ de la com (eviter les temps inutilisables)
 											   // reférence prise sur le temps affiché par les DCs
-				for (i = 1; i <= 2000; i++)
-				{
+				for (i = 1; i <= 10000; i++)
+				{	
+
+					
+					if(inPDO32(1) != inData)
+					{
+						outData++;
+					}
+					inData = inPDO32(1);
+					outPDO32(1,outData);
 					ec_send_processdata();
 					wkc = ec_receive_processdata(EC_TIMEOUTRET);
 
 					if (wkc >= expectedWKC)
 					{
-						for (int n = 1; n <= ec_slavecount; n++)
-						{
-							outVal = (outVal_t *)ec_slave[n].inputs;
-							outVal->outVal2 = 0x30303030;
-						}
 
 						printf("Processdata cycle %4d, WKC %d , O:", i, wkc);
 
-						for (j = 4; j < oloop*2; j++)
+						for (j = oloop-1; j >= 0; j--)
 						{
-							printf(" %2.2x", *(ec_slave[0].outputs + j));  //printing outputs ?
+							printf(" %2.2x", ec_slave[0].outputs[j]); //printing outputs ?
 						}
 
 						printf(" I:");
-						for (j = 4; j < iloop*1.5; j++)
+						for (j = iloop-1; j >= 0; j--)
 						{
-							printf(" %2.2x", *(ec_slave[0].inputs + j)); //printing inputs ?
+							printf(" %2.2x", ec_slave[0].inputs[j]); //printing inputs ?
 						}
 						//printf(" T(ns):%" PRId64 "", ec_DCtime - startTime);
-						//printf(" Cycle time estimate (ns) : %I64d\r", (ec_DCtime - startTime) / i);
+						//printf(" Slave cycle time : %I32d ", ec_slave[1].DCcycle);
+						printf(" Cycle time estimate (ns) : %I64d\r", (ec_DCtime - startTime) / i);
 						printf("\r");
 						needlf = TRUE;
 						fflush(stdout);
@@ -163,8 +183,7 @@ void simpletest(char *ifname) //ifname name of interface
 				{
 					if (ec_slave[i].state != EC_STATE_OPERATIONAL)
 					{
-						printf("Slave %d State=0x%2.2x StatusCode=0x%4.4x : %s\n",
-							   i, ec_slave[i].state, ec_slave[i].ALstatuscode, ec_ALstatuscode2string(ec_slave[i].ALstatuscode));
+						printf("Slave %d State=0x%2.2x StatusCode=0x%4.4x : %s\n",i,  ec_slave[i].state, ec_slave[i].ALstatuscode, ec_ALstatuscode2string(ec_slave[i].ALstatuscode));
 					}
 				}
 			}
@@ -201,7 +220,6 @@ OSAL_THREAD_FUNC ecatcheck(void *ptr)
 			if (needlf)
 			{
 				needlf = FALSE;
-
 			}
 			/* one ore more slaves are not responding */
 			ec_group[currentgroup].docheckstate = FALSE;

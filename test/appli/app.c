@@ -154,20 +154,23 @@ void simpletest(char *ifname) //ifname name of interface
 				/* cyclic loop */
 				long long startTime = ec_DCtime; //enreg temps au départ de la com (eviter les temps inutilisables)
 											   // reférence prise sur le temps affiché par les DCs
-				for (i = 1; i <= 20000; i++)
+				for (i = 1; i <= 2000; i++)
 				{	
 
 					
-					/*if(inPDO32(1) != inData)
+					if(inPDO32(1) != inData)
 					{
 						outData++;
-					}*/
+					}
+					
 					//outData++;
 					inData = inPDO32(1);
 					outPDO32(1,outData);
+					//outPDO32(2,outData);
+					//outPDO32(3,outData);
 
-               			printf("Processdata cycle %5d , Wck %3d, DCtime %12lld, dt %12lld, O:",
-                  		dorun, wkc , ec_DCtime, gl_delta);
+               			printf("Processdata cycle %5d , Wck %3d, DCtime %12lld, dt %I32d, O:",
+                  		dorun, wkc , ec_DCtime, ec_slave[1].DCrtA);
 
 						for (j = ec_slave[0].Obytes; j >= 0; j--)
 						{
@@ -186,7 +189,7 @@ void simpletest(char *ifname) //ifname name of interface
 						needlf = TRUE;
 						fflush(stdout);
 					
-					osal_usleep(5000);
+					osal_usleep(50000);
 				}
 				dorun = 0;
 				inOP = FALSE;
@@ -244,8 +247,8 @@ void ec_sync(long long reftime, long cycletime , long *offsettime)
 {
    static long  integral = 0;
    long  delta;
-   /* set linux sync point 50us later than DC sync, just as example */
-   delta = (reftime - 50000) % cycletime;
+   /* set linux sync point 500us later than DC sync, just as example */
+   delta = (reftime - 500000) % cycletime;
    if(delta> (cycletime / 2)) { delta= delta - cycletime; }
    if(delta>0){ integral++; }
    if(delta<0){ integral--; }
@@ -253,26 +256,64 @@ void ec_sync(long long reftime, long cycletime , long *offsettime)
    gl_delta = delta;
 }
 
-/*port of clock_gettime func on win*/
-int clock_gettime(int dummy, struct timespec *spec)     
+static void  nanosleep (struct timespec *requested_delay)  
 {  
-	__int64 wintime; 
-	GetSystemTimeAsFileTime((FILETIME*)&wintime);
-	wintime      -=116444736000000000i64;  //1jan1601 to 1jan1970
-	spec->tv_sec  =wintime / 10000000i64;           //seconds
-	spec->tv_nsec =wintime % 10000000i64 *100;      //nano-seconds
+      time_t seconds = requested_delay->tv_sec; // second part   
+      long int nanoSeconds = requested_delay->tv_nsec; // nano seconds part  
+  if (seconds > 0) 
+  {
+	DWORD msec = (DWORD) seconds * 1000 + nanoSeconds /  1000000i64;
+  	Sleep (msec); //If more than one second  
+  }
+  else  
+   {     
+    static double frequency; // ticks per second  
+    if (frequency == 0)  
+     {  
+      LARGE_INTEGER freq;  
+      if (!QueryPerformanceFrequency (&freq))  
+       {  
+        /* Cannot use QueryPerformanceCounter. */
+        Sleep (nanoSeconds / 1000000);  
+        return;  
+       }  
+      frequency = (double) freq.QuadPart / 1000000000.0;     // ticks per nanosecond  
+     }  
+    double counter_difference = nanoSeconds * frequency;  
+    int sleep_part = (int) nanoSeconds / 1000000 - 10;  
+    LARGE_INTEGER start;  
+    QueryPerformanceCounter (&start);  
+    long long expected_counter = start.QuadPart + (long) counter_difference;  
+    if (sleep_part > 0)     // for milliseconds part  
+     Sleep(sleep_part);  
+	 LARGE_INTEGER stop;  
+    do                         // for nanoseconds part  
+     {  
+      QueryPerformanceCounter (&stop);  
+      printf("Boucle ********");
+	
+     }  while (!(stop.QuadPart >= expected_counter));
+   }  
+ } 
+
+/*port of clock_gettime func on win*/
+int clock_gettime( struct timespec *spec)     
+{  
+	spec->tv_nsec = osal_current_time().usec * 1000;
 	return 0;
 }
 
 /* RT EtherCAT thread */
 OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 {
-   	struct timespec   ts; 
+   	
+	struct timespec   ts; 
 	//struct timespec tleft;
    	int ht;
 	long cycletime;
 
-   	clock_gettime(0, &ts);
+	printf("debug 1 \n");
+   	clock_gettime(&ts);
    	ht = (ts.tv_nsec / 1000000) + 1; /* round to nearest ms */
    	ts.tv_nsec = ht * 1000000;
    	cycletime = *(int*)ptr * 1000; /* cycletime in ns */
@@ -282,16 +323,21 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
    	while(1)
    	{
       /* calculate next cycle start */
-      add_timespec(&ts, cycletime + toff);
+      // add_timespec(&ts, cycletime + toff);
       /* wait to cycle start */
-      //clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, &tleft);
+	 //printf("nanosecond wait : %d\n",cycletime + toff);
+     //   do
+	 //   {
+	 // 	  clock_gettime(&tleft);
+	 //   }
+	 //   while(!(tleft.tv_nsec >= ts.tv_nsec));
+		//osal_usleep((cycletime + toff)/ 1000);
       if (dorun>0)
       {
          wkc = ec_receive_processdata(EC_TIMEOUTRET);
-		outData++;
          dorun++;
          /* if we have some digital output, cycle */
-         if( digout ) *digout = (uint8) ((dorun / 16) & 0xff);
+         //if( digout ) *digout = (uint8) ((dorun / 16) & 0xff);
 
          if (ec_slave[0].hasdc)
          {

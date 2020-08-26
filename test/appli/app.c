@@ -7,6 +7,7 @@
  Npcap discovers the compatible interfaces and SOEM runs on one of them.*/
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
 
@@ -18,9 +19,10 @@
 
 #define EC_TIMEOUTMON 500
 #define stack64k (64 * 1024)
+#define print_num 2000
 
 long NSEC_PER_SEC = 1000000000i64;
-struct timeval tv, t1, t2;
+struct timeval tv;
 int dorun = 0;
 int deltat, tmax = 0;
 long toff;
@@ -39,8 +41,34 @@ boolean inOP;
 uint8 currentgroup = 0;
 int32 outData,inData;
 int cycleTime;
+int64 stream1[print_num];
+int64 stream2[print_num];
+int64 t1,t2;
+int64 real_cycle;
+int64 prev_real_cycle;
+int64 jitt;
+
+
 
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
+
+int output_csv(char *fname, int length)
+{
+   FILE *fp;
+
+   int  i;
+
+   fp = fopen(fname, "w");
+   if(fp == NULL)
+      return 0;
+   for (i = 0; i < length; i++)
+   {
+      fprintf(fp, "%d; %lld; %lld;\n", i, stream1[i], stream2[i]);
+   }
+   fclose(fp);
+
+   return 1;
+}
 
 int32 inPDO32(int slave)
 {
@@ -49,7 +77,7 @@ int32 inPDO32(int slave)
 	int slaveOffset = 0;
 	if(slave > 1)
 	{
-		slaveOffset = slave*4;
+		slaveOffset = (slave-1)*4;
 	}
 	b0 = ec_slave[0].inputs[3 + slaveOffset];
     b1 = ec_slave[0].inputs[2 + slaveOffset];
@@ -65,7 +93,7 @@ void outPDO32(int slave, uint32_t data)
 	int slaveOffset = 0;
 	if(slave > 1)
 	{
-		slaveOffset = slave*4;
+		slaveOffset = (slave-1)*4;
 	}
 	for (int i = 0 + slaveOffset; i < 3 + slaveOffset ;i++)
 	{
@@ -96,8 +124,8 @@ void simpletest(char *ifname) //ifname name of interface
 			ec_config_map(&IOmap); //configuration of the IO Map of devices
 
 			ec_configdc(); // config distributed clocks
-
-			ec_dcsync01(1,1,cycleTime,1,0);
+			for(i = 0; i< ec_slavecount; i++)
+			ec_dcsync01(i,1,cycleTime,1,0);
 			printf("Slaves mapped, state to SAFE_OP.\n");
 
 			/* wait for all slaves to reach SAFE_OP state */
@@ -154,7 +182,8 @@ void simpletest(char *ifname) //ifname name of interface
 				/* cyclic loop */
 				long long startTime = ec_DCtime; //enreg temps au départ de la com (eviter les temps inutilisables)
 											   // reférence prise sur le temps affiché par les DCs
-				for (i = 1; i <= 2000; i++)
+
+				for (i = 1; i <= print_num; i++)
 				{	
 
 					
@@ -162,29 +191,35 @@ void simpletest(char *ifname) //ifname name of interface
 					{
 						outData++;
 					}
-					
+					real_cycle = _abs64(real_cycle);
 					//outData++;
 					inData = inPDO32(1);
-					outPDO32(1,outData);
-					//outPDO32(2,outData);
-					//outPDO32(3,outData);
 
-               			printf("Processdata cycle %5d , Wck %3d, DCtime %12lld, dt %I32d, O:",
-                  		dorun, wkc , ec_DCtime, ec_slave[1].DCrtA);
 
-						for (j = ec_slave[0].Obytes; j >= 0; j--)
+					
+               			printf("Processdata cycle %5d , Wck %2d, DCtime %12lld, ct %9lld, Jitter %9lld, O:",
+                  		dorun, wkc , ec_DCtime, real_cycle,jitt);
+
+
+						jitt = real_cycle - prev_real_cycle;
+						prev_real_cycle = real_cycle;
+
+						stream1[i] = real_cycle;
+						stream2[i] = jitt;
+
+						for (j = ec_slave[0].Obytes-1; j >= 0; j--)
 						{
 							printf(" %2.2x", ec_slave[0].outputs[j]); //printing outputs ?
 						}
 
 						printf(" I:");
-						for (j = ec_slave[0].Ibytes; j >= 0; j--)
+						for (j = ec_slave[0].Ibytes-1; j >= 0; j--)
 						{
 							printf(" %2.2x", ec_slave[0].inputs[j]); //printing inputs ?
 						}
 						//printf(" T(ns):%" PRId64 "", ec_DCtime - startTime);
 						//printf(" Slave cycle time : %I32d ", ec_slave[1].DCcycle);
-						printf(" Cycle time (ns): %I64d Com time %I64d", (ec_DCtime - startTime) / dorun, (ec_DCtime - startTime));
+						//printf(" Cycle time (ns): %I64d Com time %I64d", (ec_DCtime - startTime) / dorun, (ec_DCtime - startTime));
 						printf("\r");
 						needlf = TRUE;
 						fflush(stdout);
@@ -218,6 +253,7 @@ void simpletest(char *ifname) //ifname name of interface
 		printf("End SOEM close socket\n");
 		/* stop SOEM, close socket */
 		ec_close();
+		output_csv("outputs.csv",print_num);
 	}
 	else
 	{
@@ -331,14 +367,27 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 	 // 	  clock_gettime(&tleft);
 	 //   }
 	 //   while(!(tleft.tv_nsec >= ts.tv_nsec));
-		//osal_usleep((cycletime + toff)/ 1000);
+
+	  osal_usleep((cycletime + toff)/ 1000);
       if (dorun>0)
       {
          wkc = ec_receive_processdata(EC_TIMEOUTRET);
+		 if(dorun%2 == 0)
+		 {
+			 t1 = ec_DCtime;
+		 }
+		 else
+		 {
+			 t2 = ec_DCtime;
+		 } 
+
+		 real_cycle = t1-t2;
          dorun++;
          /* if we have some digital output, cycle */
          //if( digout ) *digout = (uint8) ((dorun / 16) & 0xff);
-
+		outPDO32(1,outData);
+		outPDO32(2,outData);
+		outPDO32(3,outData);
          if (ec_slave[0].hasdc)
          {
             /* calulate toff to get linux time and DC synced */

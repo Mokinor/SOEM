@@ -6,7 +6,10 @@
  /* Merging of Npcap library examples with SOEM library
  Npcap discovers the compatible interfaces and SOEM runs on one of them.*/
 
+
+/*	INCLUDES */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
 
@@ -14,13 +17,17 @@
 #include <pcap.h>
 #include <Windows.h>
 #include <time.h>
-#include "misc.h" /* LoadNpcapDlls */
+#include "misc.h" 
 
+/*	DEFINES	*/
 #define EC_TIMEOUTMON 500
 #define stack64k (64 * 1024)
+#define print_num 100000
+#define PRINT_OUT 
 
+/*	Variable declarations	*/
 long NSEC_PER_SEC = 1000000000i64;
-struct timeval tv, t1, t2;
+struct timeval tv;
 int dorun = 0;
 int deltat, tmax = 0;
 long toff;
@@ -39,17 +46,53 @@ boolean inOP;
 uint8 currentgroup = 0;
 int32 outData,inData;
 int cycleTime;
+int64 stream1[500000];
+int64 stream2[500000];
+int64 t1,t2;
+int64 real_cycle;
+int64 prev_real_cycle;
+int64 jitt;
 
+
+/* pcap packet handler declaration*/
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
 
+
+/* .csv file output function takes filename and length of tables as params
+* can output 2 sets of data in current form
+*/
+int output_csv(char *fname, int length)
+{
+   FILE *fp;
+
+   int  i;
+
+   fp = fopen(fname, "w");
+   if(fp == NULL)
+      return 0;
+   for (i = 0; i < length; i++)
+   {
+      fprintf(fp, "%d; %lld; %lld;\n", i, stream1[i], stream2[i]);
+   }
+   fclose(fp);
+
+   return 1;
+}
+
+
+/*!
+concatenation of slave inputs to an int for better printing and other things
+\param slave slave number 
+*/
 int32 inPDO32(int slave)
 {
 	int32 res;
 	uint32_t b0,b1,b2,b3;
 	int slaveOffset = 0;
+	/* calculate offest in IOmap based on slave number */
 	if(slave > 1)
 	{
-		slaveOffset = slave*4;
+		slaveOffset = (slave-1)*4;
 	}
 	b0 = ec_slave[0].inputs[3 + slaveOffset];
     b1 = ec_slave[0].inputs[2 + slaveOffset];
@@ -60,22 +103,28 @@ int32 inPDO32(int slave)
 	return res;
 }
 
+/* outputs changing function (for one cycle only)*/
 void outPDO32(int slave, uint32_t data)
 {
 	int slaveOffset = 0;
+	/* calculate offest in IOmap based on slave number */
 	if(slave > 1)
 	{
-		slaveOffset = slave*4;
+		slaveOffset = (slave-1)*4;
 	}
 	for (int i = 0 + slaveOffset; i < 3 + slaveOffset ;i++)
 	{
 		ec_slave[0].outputs[i]= (uint8_t)(outData >> (8*i));
 	}
 }
-// Simple test from SOEM library (calls all the useful functions)
+
+
+/* taken from simple_test example
+Contains initialization of interface and slaves
+Used to print IO and store them*/
 void simpletest(char *ifname) //ifname name of interface
 {
-	int i, j, oloop, iloop, chk;
+	int i, oloop, iloop, chk;
 	needlf = FALSE;
 	inOP = FALSE;
 
@@ -92,16 +141,23 @@ void simpletest(char *ifname) //ifname name of interface
 		{
 
 			printf("%d slaves found and configured.\n", ec_slavecount);
+			
 
-			ec_config_map(&IOmap); //configuration of the IO Map of devices
+			// ec_config_map(&IOmap); //configuration of the IO Map of devices
 
-			ec_configdc(); // config distributed clocks
+			// ec_configdc(); // config distributed clocks
+			// for(i = 1; i<= ec_slavecount; i++)
+			// {
+			// 	printf("dcsync%d\n",i);
+			// 	ec_dcsync01(i,TRUE,cycleTime,1,0);
+			// }
 
-			ec_dcsync01(1,1,cycleTime,1,0);
+			
 			printf("Slaves mapped, state to SAFE_OP.\n");
 
 			/* wait for all slaves to reach SAFE_OP state */
 			ec_statecheck(0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE * 4);
+			
 
 			/* Value of input and output loops (limited to 8)*/
 
@@ -128,9 +184,8 @@ void simpletest(char *ifname) //ifname name of interface
 			printf("Calculated workcounter %d\n", expectedWKC);
 			ec_slave[0].state = EC_STATE_OPERATIONAL;
 			/* send one valid process data to make outputs in slaves happy*/
-			ec_send_processdata();								 // pas pour les rendre happy (passe les slaves de l'etat safe-op a op)
-			int TimeOut = ec_receive_processdata(EC_TIMEOUTRET); // def wkc de transmission de PDO/PDI
-			printf("TimeoutRet : %d\n", TimeOut);
+			ec_send_processdata();								 // sending processdata makes slaves go from preop to safeop
+			int TimeOut = ec_receive_processdata(EC_TIMEOUTRET); // 
 			/* request OP state for all slaves */
 			ec_writestate(0);
 			chk = 200;
@@ -144,6 +199,7 @@ void simpletest(char *ifname) //ifname name of interface
 				ec_statecheck(0, EC_STATE_OPERATIONAL, 50000);
 			} while (chk-- && (ec_slave[0].state != EC_STATE_OPERATIONAL));
 
+			/*launch RT thread*/
 			dorun = 1;
 
 			if (ec_slave[0].state == EC_STATE_OPERATIONAL)
@@ -152,47 +208,65 @@ void simpletest(char *ifname) //ifname name of interface
 				inOP = TRUE; //Bool for OP status
 				
 				/* cyclic loop */
-				long long startTime = ec_DCtime; //enreg temps au départ de la com (eviter les temps inutilisables)
-											   // reférence prise sur le temps affiché par les DCs
-				for (i = 1; i <= 20000; i++)
+				long long startTime = ec_DCtime; // approx. start time of cyclic communication (not used anymore)
+											   
+				// Can calculate communication time ~= print_num * 2ms
+				for (i = 1; i <= print_num; i++)
 				{	
 
-					
-					/*if(inPDO32(1) != inData)
+					// change output on input change
+					if(inPDO32(1) != inData)
 					{
 						outData++;
-					}*/
-					//outData++;
+					}
+
+					// refresh input value for next loop
 					inData = inPDO32(1);
-					outPDO32(1,outData);
 
-               			printf("Processdata cycle %5d , Wck %3d, DCtime %12lld, dt %12lld, O:",
-                  		dorun, wkc , ec_DCtime, gl_delta);
 
-						for (j = ec_slave[0].Obytes; j >= 0; j--)
+					#ifdef PRINT_OUT
+						int j;
+               			printf("Processdata cycle %5d , Wck %2d, DCtime %12lld, ct %9lld, Jitter %9lld, O:",
+                  		dorun, wkc , ec_DCtime, real_cycle,jitt);
+
+						/*jitter calculation*/
+						jitt = real_cycle - prev_real_cycle;
+						prev_real_cycle = real_cycle;
+
+
+						/* streams for file saving*/
+						// move this to RT thread ?
+						//stream1[i] = real_cycle;
+						//stream2[i] = dorun;
+
+						/* printing master outputs*/
+						for (j = ec_slave[0].Obytes-1; j >= 0; j--)
 						{
-							printf(" %2.2x", ec_slave[0].outputs[j]); //printing outputs ?
+							printf(" %2.2x", ec_slave[0].outputs[j]); 
 						}
-
+						
+						/*printing master inputs*/
 						printf(" I:");
-						for (j = ec_slave[0].Ibytes; j >= 0; j--)
+						for (j = ec_slave[0].Ibytes-1; j >= 0; j--)
 						{
-							printf(" %2.2x", ec_slave[0].inputs[j]); //printing inputs ?
+							printf(" %2.2x", ec_slave[0].inputs[j]); 
 						}
 						//printf(" T(ns):%" PRId64 "", ec_DCtime - startTime);
 						//printf(" Slave cycle time : %I32d ", ec_slave[1].DCcycle);
-						printf(" Cycle time (ns): %I64d Com time %I64d", (ec_DCtime - startTime) / dorun, (ec_DCtime - startTime));
+						//printf(" Cycle time (ns): %I64d Com time %I64d", (ec_DCtime - startTime) / dorun, (ec_DCtime - startTime));
 						printf("\r");
+					#endif
 						needlf = TRUE;
 						fflush(stdout);
-					
-					osal_usleep(5000);
+					/* sleep time to not overload CPU*/
+					osal_usleep(1000);
 				}
 				dorun = 0;
 				inOP = FALSE;
 			}
 			else
-			{
+			{	
+				/*return error if slaves not in OP*/
 				printf("Not all slaves reached operational state.\n");
 				ec_readstate();
 				for (i = 1; i <= ec_slavecount; i++)
@@ -215,6 +289,8 @@ void simpletest(char *ifname) //ifname name of interface
 		printf("End SOEM close socket\n");
 		/* stop SOEM, close socket */
 		ec_close();
+		/* file output*/
+		output_csv("outputs.csv",print_num);
 	}
 	else
 	{
@@ -244,8 +320,8 @@ void ec_sync(long long reftime, long cycletime , long *offsettime)
 {
    static long  integral = 0;
    long  delta;
-   /* set linux sync point 50us later than DC sync, just as example */
-   delta = (reftime - 50000) % cycletime;
+   /* set linux sync point 500us later than DC sync, just as example */
+   delta = (reftime - 500000) % cycletime;
    if(delta> (cycletime / 2)) { delta= delta - cycletime; }
    if(delta>0){ integral++; }
    if(delta<0){ integral--; }
@@ -253,26 +329,65 @@ void ec_sync(long long reftime, long cycletime , long *offsettime)
    gl_delta = delta;
 }
 
-/*port of clock_gettime func on win*/
-int clock_gettime(int dummy, struct timespec *spec)     
+/* not used port of nanosleep function from Linux*/
+static void  nanosleep (struct timespec *requested_delay)  
 {  
-	__int64 wintime; 
-	GetSystemTimeAsFileTime((FILETIME*)&wintime);
-	wintime      -=116444736000000000i64;  //1jan1601 to 1jan1970
-	spec->tv_sec  =wintime / 10000000i64;           //seconds
-	spec->tv_nsec =wintime % 10000000i64 *100;      //nano-seconds
+      time_t seconds = requested_delay->tv_sec; // second part   
+      long int nanoSeconds = requested_delay->tv_nsec; // nano seconds part  
+  if (seconds > 0) 
+  {
+	DWORD msec = (DWORD) seconds * 1000 + nanoSeconds /  1000000i64;
+  	Sleep (msec); //If more than one second  
+  }
+  else  
+   {     
+    static double frequency; // ticks per second  
+    if (frequency == 0)  
+     {  
+      LARGE_INTEGER freq;  
+      if (!QueryPerformanceFrequency (&freq))  
+       {  
+        /* Cannot use QueryPerformanceCounter. */
+        Sleep (nanoSeconds / 1000000);  
+        return;  
+       }  
+      frequency = (double) freq.QuadPart / 1000000000.0;     // ticks per nanosecond  
+     }  
+    double counter_difference = nanoSeconds * frequency;  
+    int sleep_part = (int) nanoSeconds / 1000000 - 10;  
+    LARGE_INTEGER start;  
+    QueryPerformanceCounter (&start);  
+    long long expected_counter = start.QuadPart + (long) counter_difference;  
+    if (sleep_part > 0)     // for milliseconds part  
+     Sleep(sleep_part);  
+	 LARGE_INTEGER stop;  
+    do                         // for nanoseconds part  
+     {  
+      QueryPerformanceCounter (&stop);  
+      printf("Boucle ********");
+	
+     }  while (!(stop.QuadPart >= expected_counter));
+   }  
+ } 
+
+/*port of clock_gettime func on win*/
+int clock_gettime( struct timespec *spec)     
+{  
+	spec->tv_nsec = osal_current_time().usec * 1000;
 	return 0;
 }
 
 /* RT EtherCAT thread */
 OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 {
-   	struct timespec   ts; 
+   	
+	struct timespec   ts; 
 	//struct timespec tleft;
    	int ht;
 	long cycletime;
 
-   	clock_gettime(0, &ts);
+	printf("debug 1 \n");
+   	clock_gettime(&ts);
    	ht = (ts.tv_nsec / 1000000) + 1; /* round to nearest ms */
    	ts.tv_nsec = ht * 1000000;
    	cycletime = *(int*)ptr * 1000; /* cycletime in ns */
@@ -282,17 +397,38 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
    	while(1)
    	{
       /* calculate next cycle start */
-      add_timespec(&ts, cycletime + toff);
+      // add_timespec(&ts, cycletime + toff);
       /* wait to cycle start */
-      //clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, &tleft);
+	 //printf("nanosecond wait : %d\n",cycletime + toff);
+     //   do
+	 //   {
+	 // 	  clock_gettime(&tleft);
+	 //   }
+	 //   while(!(tleft.tv_nsec >= ts.tv_nsec));
+
+	  osal_usleep((cycletime + toff)/ 1000);
       if (dorun>0)
       {
          wkc = ec_receive_processdata(EC_TIMEOUTRET);
-		outData++;
+		 if(dorun%2 == 0)
+		 {
+			 t1 = ec_DCtime;
+		 }
+		 else
+		 {
+			 t2 = ec_DCtime;
+		 } 
+
+		 real_cycle = t1-t2;
+		stream1[dorun] = real_cycle;
+		stream2[dorun] = dorun;
          dorun++;
          /* if we have some digital output, cycle */
-         if( digout ) *digout = (uint8) ((dorun / 16) & 0xff);
-
+         //if( digout ) *digout = (uint8) ((dorun / 16) & 0xff);
+		outPDO32(1,outData);
+		outPDO32(2,outData);
+		outPDO32(3,outData);
+		outPDO32(4,outData);
          if (ec_slave[0].hasdc)
          {
             /* calulate toff to get linux time and DC synced */
@@ -305,7 +441,6 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 
 
 /* OS abstracted thread to manage errors */
-
 OSAL_THREAD_FUNC ecatcheck(void *ptr)
 {
 	int slave;
@@ -383,6 +518,8 @@ OSAL_THREAD_FUNC ecatcheck(void *ptr)
 	}
 }
 
+
+/* main function*/
 int main(int argc, char *argv[])
 {
 	pcap_if_t *alldevs;
@@ -393,7 +530,7 @@ int main(int argc, char *argv[])
 	char errbuf[PCAP_ERRBUF_SIZE];
 	
 
-	dorun =0;
+	dorun = 0;
 	cycleTime = atoi(argv[1]);
 
 	/* Load Npcap and its functions. */
@@ -420,6 +557,7 @@ int main(int argc, char *argv[])
 			printf(" (No description available)\n");
 	}
 
+	/* if no interface found*/
 	if (i == 0)
 	{
 		printf("\nNo interfaces found! Make sure Npcap is installed.\n");
@@ -448,7 +586,7 @@ int main(int argc, char *argv[])
 	// pthread_create( &thread1, NULL, (void *) &ecatcheck, (void*) &cycleTime);
 	osal_thread_create(&thread1, 128000, &ecatcheck, (void *)&ctime);
 	/* create RT thread */
-    osal_thread_create_rt(&thread1, stack64k * 2, &ecatthread, (void*) &cycleTime);
+    osal_thread_create_rt(&thread2, stack64k * 2, &ecatthread, (void*) &cycleTime);
 	/* start cyclic part */
 	simpletest(d->name);
 
@@ -456,7 +594,7 @@ int main(int argc, char *argv[])
 	return (0);
 }
 
-/* Callback function invoked by libpcap for every incoming packet (not used ??)*/
+/* Callback function invoked by libpcap for every incoming packet (not used yet)*/
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data)
 {
 	struct tm ltime;

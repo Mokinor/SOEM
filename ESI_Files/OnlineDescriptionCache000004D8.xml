@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<EtherCATInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="EtherCATInfo.xsd" Version="1.2">
+	<Vendor>
+		<Id>1240</Id>
+		<Name>Vendor with ID 000004D8h</Name>
+	</Vendor>
+	<Descriptions>
+		<Groups>
+			<Group SortOrder="-1">
+				<Type>LAN9252-C2000 Sample Application</Type>
+				<Name LcId="0">LAN9252-C2000 Sample Application</Name>
+			</Group>
+		</Groups>
+		<Devices>
+			<Device Physics="YY">
+				<Type ProductCode="#xd" RevisionNo="#x1">LAN9252-C2000 Sample Application</Type>
+				<Name LcId="0">LAN9252-C2000 Sample Application</Name>
+				<Info>
+					<Mailbox>
+						<Timeout>
+							<RequestTimeout>100</RequestTimeout>
+							<ResponseTimeout>1000</ResponseTimeout>
+						</Timeout>
+					</Mailbox>
+				</Info>
+				<GroupType>LAN9252-C2000 Sample Application</GroupType>
+				<Fmmu>Outputs</Fmmu>
+				<Fmmu>Inputs</Fmmu>
+				<Sm DefaultSize="0" StartAddress="#x1000" ControlByte="#x44" Enable="1" OpOnly="true">Outputs</Sm>
+				<Sm DefaultSize="0" StartAddress="#x1200" ControlByte="#x0" Enable="1">Inputs</Sm>
+				<RxPdo Fixed="true" Sm="0">
+					<Index>#x1a00</Index>
+					<Name>Byte 0</Name>
+					<Entry>
+						<Index>#x3101</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Output</Name>
+						<DataType>USINT</DataType>
+					</Entry>
+				</RxPdo>
+				<TxPdo Fixed="true" Sm="1">
+					<Index>#x1600</Index>
+					<Name>Byte 0</Name>
+					<Entry>
+						<Index>#x3001</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Input</Name>
+						<DataType>USINT</DataType>
+					</Entry>
+				</TxPdo>
+				<Dc>
+					<OpMode>
+						<Name>Synchron</Name>
+						<Desc>Synchron</Desc>
+						<AssignActivate>#x0</AssignActivate>
+						<CycleTimeSync0 Factor="1">0</CycleTimeSync0>
+						<ShiftTimeSync0>0</ShiftTimeSync0>
+						<CycleTimeSync1 Factor="1">0</CycleTimeSync1>
+						<ShiftTimeSync1>0</ShiftTimeSync1>
+					</OpMode>
+					<OpMode>
+						<Name>DC</Name>
+						<Desc>DC</Desc>
+						<AssignActivate>#x300</AssignActivate>
+						<CycleTimeSync0 Factor="1">0</CycleTimeSync0>
+						<ShiftTimeSync0>0</ShiftTimeSync0>
+						<CycleTimeSync1 Factor="1">0</CycleTimeSync1>
+						<ShiftTimeSync1>0</ShiftTimeSync1>
+					</OpMode>
+				</Dc>
+				<Eeprom>
+					<ByteSize>2048</ByteSize>
+					<ConfigData>800f00cc8813ff00000000800000</ConfigData>
+				</Eeprom>
+			</Device>
+		</Devices>
+	</Descriptions>
+</EtherCATInfo>

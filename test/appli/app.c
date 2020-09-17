@@ -222,12 +222,6 @@ void simpletest(char *ifname) //ifname name of interface
 						jitt = real_cycle - prev_real_cycle;
 						prev_real_cycle = real_cycle;
 
-
-						/* streams for file saving*/
-						// move this to RT thread ?
-						//stream1[i] = real_cycle;
-						//stream2[i] = dorun;
-
 						/* printing master outputs*/
 						for (j = ec_slave[0].Obytes-1; j >= 0; j--)
 						{

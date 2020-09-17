@@ -13,10 +13,14 @@
  *
  * (c)Arthur Ketels 2010-2012
  */
+#define HAVE_REMOTE
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
+#include <pcap.h>
+#include "misc.h"
 
 #include "ethercat.h"
 
@@ -35,6 +39,7 @@
 
 #define MAXSLENGTH        256
 
+
 uint8 ebuf[MAXBUF];
 uint8 ob;
 uint16 ow;
@@ -47,6 +52,9 @@ int mode;
 char sline[MAXSLENGTH];
 
 #define IHEXLENGTH 0x20
+
+
+void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
 
 void calc_crc(uint8 *crc, uint8 b)
 {
@@ -432,32 +440,87 @@ void eepromtool(char *ifname, int slave, int mode, char *fname)
 
 int main(int argc, char *argv[])
 {
+   pcap_if_t *alldevs;
+	pcap_if_t *d;
+	int inum;
+	int i = 0;
+	// pcap_t *adhandle;
+   char errbuf[PCAP_ERRBUF_SIZE];
+   
+   /* Load Npcap and its functions. */
+	if (!LoadNpcapDlls())
+	{
+		fprintf(stderr, "Couldn't load Npcap\n");
+		exit(1);
+	}
+
+	/* Retrieve the device list on the local machine */
+	if (pcap_findalldevs_ex("rpcap://", NULL, &alldevs, errbuf) == -1)
+	{
+		fprintf(stderr, "Error in pcap_findalldevs: %s\n", errbuf);
+		exit(1);
+	}
+
+	/* Print the list */
+	for (d = alldevs; d; d = d->next)
+	{
+		printf("%d. %s", ++i, d->name);
+		if (d->description)
+			printf(" (%s)\n", d->description);
+		else
+			printf(" (No description available)\n");
+	}
+
+	/* if no interface found*/
+	if (i == 0)
+	{
+		printf("\nNo interfaces found! Make sure Npcap is installed.\n");
+		return -1;
+	}
+
+	/* ask for user input*/
+	printf("Enter the interface number (1-%d):", i);
+	scanf_s("%d", &inum);
+
+	if (inum < 1 || inum > i)
+	{
+		printf("\nInterface number out of range.\n");
+		/* Free the device list */
+		pcap_freealldevs(alldevs);
+		return -1;
+	}
+
+	/* Jump to the selected adapter */
+	for (d = alldevs, i = 0; i < inum - 1; d = d->next, i++)
+		;
+   
+   
+   
    printf("SOEM (Simple Open EtherCAT Master)\nEEPROM tool\n");
 
    mode = MODE_NONE;
-   if (argc > 3)
+   if (argc > 2)
    {
-      slave = atoi(argv[2]);
-      if ((strncmp(argv[3], "-i", sizeof("-i")) == 0))   mode = MODE_INFO;
-      if (argc > 4)
+      slave = atoi(argv[1]);
+      if ((strncmp(argv[2], "-i", sizeof("-i")) == 0))   mode = MODE_INFO;
+      if (argc > 3)
       {
-         if ((strncmp(argv[3], "-r", sizeof("-r")) == 0))   mode = MODE_READBIN;
-         if ((strncmp(argv[3], "-ri", sizeof("-ri")) == 0)) mode = MODE_READINTEL;
-         if ((strncmp(argv[3], "-w", sizeof("-w")) == 0))   mode = MODE_WRITEBIN;
-         if ((strncmp(argv[3], "-wi", sizeof("-wi")) == 0)) mode = MODE_WRITEINTEL;
-         if ((strncmp(argv[3], "-walias", sizeof("-walias")) == 0))
+         if ((strncmp(argv[2], "-r", sizeof("-r")) == 0))   mode = MODE_READBIN;
+         if ((strncmp(argv[2], "-ri", sizeof("-ri")) == 0)) mode = MODE_READINTEL;
+         if ((strncmp(argv[2], "-w", sizeof("-w")) == 0))   mode = MODE_WRITEBIN;
+         if ((strncmp(argv[2], "-wi", sizeof("-wi")) == 0)) mode = MODE_WRITEINTEL;
+         if ((strncmp(argv[2], "-walias", sizeof("-walias")) == 0))
          {
             mode = MODE_WRITEALIAS;
-            alias = atoi(argv[4]);
+            alias = atoi(argv[3]);
          }
       }
       /* start tool */
-      eepromtool("rpcap://\\Device\\NPF_{0D5E0C76-8BE2-4DB6-A503-614802678747}",slave,mode,argv[4]);
+      eepromtool(d->name,slave,mode,argv[3]);
    }
    else
    {
-      printf("Usage: eepromtool ifname slave OPTION fname|alias\n");
-      printf("ifname = eth0 for example\n");
+      printf("Usage: eepromtool slave OPTION fname|alias\n");
       printf("slave = slave number in EtherCAT order 1..n\n");
       printf("    -i      display EEPROM information\n");
       printf("    -walias write slave alias\n");
@@ -471,3 +534,24 @@ int main(int argc, char *argv[])
 
    return (0);
 }
+
+void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data)
+{
+	struct tm ltime;
+	char timestr[16];
+	time_t local_tv_sec;
+
+	/*
+	 * unused variables
+	 */
+	(VOID)(param);
+	(VOID)(pkt_data);
+
+	/* convert the timestamp to readable format */
+	local_tv_sec = header->ts.tv_sec;
+	localtime_s(&ltime, &local_tv_sec);
+	strftime(timestr, sizeof timestr, "%H:%M:%S", &ltime);
+
+	printf("%s,%.6d len:%d\n", timestr, header->ts.tv_usec, header->len);
+}
+

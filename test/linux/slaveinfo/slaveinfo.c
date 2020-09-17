@@ -10,10 +10,12 @@
  *
  * (c)Arthur Ketels 2010 - 2011
  */
-
+#define HAVE_REMOTE
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include <pcap.h>
+#include "misc.h"
 
 #include "ethercat.h"
 
@@ -617,24 +619,77 @@ void slaveinfo(char *ifname)
    }
 }
 
-char ifbuf[1024];
+
 
 int main(int argc, char *argv[])
 {
    ec_adaptert * adapter = NULL;
+    pcap_if_t *alldevs;
+	pcap_if_t *d;
+	int inum;
+	int i = 0;
+	// pcap_t *adhandle;
+   char errbuf[PCAP_ERRBUF_SIZE];
    printf("SOEM (Simple Open EtherCAT Master)\nSlaveinfo\n");
 
-   if (argc > 1)
+      /* Load Npcap and its functions. */
+	if (!LoadNpcapDlls())
+	{
+		fprintf(stderr, "Couldn't load Npcap\n");
+		exit(1);
+	}
+
+	/* Retrieve the device list on the local machine */
+	if (pcap_findalldevs_ex("rpcap://", NULL, &alldevs, errbuf) == -1)
+	{
+		fprintf(stderr, "Error in pcap_findalldevs: %s\n", errbuf);
+		exit(1);
+	}
+
+	/* Print the list */
+	for (d = alldevs; d; d = d->next)
+	{
+		printf("%d. %s", ++i, d->name);
+		if (d->description)
+			printf(" (%s)\n", d->description);
+		else
+			printf(" (No description available)\n");
+	}
+
+	/* if no interface found*/
+	if (i == 0)
+	{
+		printf("\nNo interfaces found! Make sure Npcap is installed.\n");
+		return -1;
+	}
+
+	/* ask for user input*/
+	printf("Enter the interface number (1-%d):", i);
+	scanf_s("%d", &inum);
+
+	if (inum < 1 || inum > i)
+	{
+		printf("\nInterface number out of range.\n");
+		/* Free the device list */
+		pcap_freealldevs(alldevs);
+		return -1;
+	}
+
+	/* Jump to the selected adapter */
+	for (d = alldevs, i = 0; i < inum - 1; d = d->next, i++)
+		;
+
+   if (argc > 0)
    {
-      if ((argc > 2) && (strncmp(argv[2], "-sdo", sizeof("-sdo")) == 0)) printSDO = TRUE;
-      if ((argc > 2) && (strncmp(argv[2], "-map", sizeof("-map")) == 0)) printMAP = TRUE;
+      if ((argc > 1) && (strncmp(argv[1], "-sdo", sizeof("-sdo")) == 0)) printSDO = TRUE;
+      if ((argc > 1) && (strncmp(argv[1], "-map", sizeof("-map")) == 0)) printMAP = TRUE;
       /* start slaveinfo */
-      strcpy(ifbuf, argv[1]);
-      slaveinfo("rpcap://\\Device\\NPF_{0D5E0C76-8BE2-4DB6-A503-614802678747}");
+      
+      slaveinfo(d->name);
    }
    else
    {
-      printf("Usage: slaveinfo ifname [options]\nifname = eth0 for example\nOptions :\n -sdo : print SDO info\n -map : print mapping\n");
+      printf("Usage: slaveinfo [options]\nOptions :\n -sdo : print SDO info\n -map : print mapping\n");
 
       printf ("Available adapters\n");
       adapter = ec_find_adapters ();

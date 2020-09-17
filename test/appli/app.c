@@ -22,14 +22,14 @@
 /*	DEFINES	*/
 #define EC_TIMEOUTMON 500
 #define stack64k (64 * 1024)
-#define print_num 100000
+#define print_num 100000 
 #define PRINT_OUT 
 
 /*	Variable declarations	*/
 long NSEC_PER_SEC = 1000000000i64;
 struct timeval tv;
 int dorun = 0;
-int deltat, tmax = 0;
+int deltat, tmax =0;
 long toff;
 long long gl_delta;
 int DCdiff;
@@ -81,7 +81,7 @@ int output_csv(char *fname, int length)
 
 
 /*!
-concatenation of slave inputs to an int for better printing and other things
+concatenation of slave inputs to an int for better printing and processing
 \param slave slave number 
 */
 int32 inPDO32(int slave)
@@ -124,7 +124,7 @@ Contains initialization of interface and slaves
 Used to print IO and store them*/
 void simpletest(char *ifname) //ifname name of interface
 {
-	int i, oloop, iloop, chk;
+	int i, chk;
 	needlf = FALSE;
 	inOP = FALSE;
 
@@ -142,15 +142,18 @@ void simpletest(char *ifname) //ifname name of interface
 
 			printf("%d slaves found and configured.\n", ec_slavecount);
 			
+			ec_configdc(); // config distributed clocks
+			
+						for(i = 1; i<= ec_slavecount; i++)
+			{
+				printf("dcsync%d\n",i);
+				ec_dcsync01(i,TRUE,cycleTime*1000,cycleTime*1000,0);
+			// 	ec_dcsync0(i,TRUE,cycleTime,0);
+			}
 
-			// ec_config_map(&IOmap); //configuration of the IO Map of devices
+			ec_config_map(&IOmap); //configuration of the IO Map of devices
 
-			// ec_configdc(); // config distributed clocks
-			// for(i = 1; i<= ec_slavecount; i++)
-			// {
-			// 	printf("dcsync%d\n",i);
-			// 	ec_dcsync01(i,TRUE,cycleTime,1,0);
-			// }
+			
 
 			
 			printf("Slaves mapped, state to SAFE_OP.\n");
@@ -158,22 +161,6 @@ void simpletest(char *ifname) //ifname name of interface
 			/* wait for all slaves to reach SAFE_OP state */
 			ec_statecheck(0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE * 4);
 			
-
-			/* Value of input and output loops (limited to 8)*/
-
-			oloop = ec_slave[0].Obytes;
-			printf("oloop : %d\n", oloop);
-			if ((oloop == 0) && (ec_slave[0].Obits > 0))
-				oloop = 1;
-			if (oloop > 8)
-				oloop = 8;
-
-			iloop = ec_slave[0].Ibytes;
-			printf("iloop : %d\n", iloop);
-			if ((iloop == 0) && (ec_slave[0].Ibits > 0))
-				iloop = 1;
-			if (iloop > 8)
-				iloop = 8;
 
 			/* Print number of segments/branches in network*/
 
@@ -188,7 +175,7 @@ void simpletest(char *ifname) //ifname name of interface
 			int TimeOut = ec_receive_processdata(EC_TIMEOUTRET); // 
 			/* request OP state for all slaves */
 			ec_writestate(0);
-			chk = 200;
+			chk = 2000;
 
 
 			/* wait for all slaves to reach OP state */
@@ -197,7 +184,7 @@ void simpletest(char *ifname) //ifname name of interface
 				ec_send_processdata();
 				ec_receive_processdata(EC_TIMEOUTRET);
 				ec_statecheck(0, EC_STATE_OPERATIONAL, 50000);
-			} while (chk-- && (ec_slave[0].state != EC_STATE_OPERATIONAL));
+			} while (chk-- || (ec_slave[0].state != EC_STATE_OPERATIONAL));
 
 			/*launch RT thread*/
 			dorun = 1;
@@ -209,9 +196,11 @@ void simpletest(char *ifname) //ifname name of interface
 				
 				/* cyclic loop */
 				long long startTime = ec_DCtime; // approx. start time of cyclic communication (not used anymore)
-											   
+
+				printf("Communication in progress ...\n");					   
 				// Can calculate communication time ~= print_num * 2ms
-				for (i = 1; i <= print_num; i++)
+				// for (i = 1; i <= print_num; i++)
+				while(1)
 				{	
 
 					// change output on input change
@@ -325,7 +314,7 @@ void ec_sync(long long reftime, long cycletime , long *offsettime)
    if(delta> (cycletime / 2)) { delta= delta - cycletime; }
    if(delta>0){ integral++; }
    if(delta<0){ integral--; }
-   *offsettime = -(delta / 100) - (integral / 20);
+   *offsettime = -(delta / 100) - (integral / 20); // offsettime = - (delta*P) - (integral*I)
    gl_delta = delta;
 }
 
@@ -385,8 +374,6 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 	//struct timespec tleft;
    	int ht;
 	long cycletime;
-
-	printf("debug 1 \n");
    	clock_gettime(&ts);
    	ht = (ts.tv_nsec / 1000000) + 1; /* round to nearest ms */
    	ts.tv_nsec = ht * 1000000;
@@ -410,18 +397,16 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
       if (dorun>0)
       {
          wkc = ec_receive_processdata(EC_TIMEOUTRET);
-		 if(dorun%2 == 0)
+		 
+		t1 = ec_DCtime;
+		real_cycle = t1-t2;
+		t2 = ec_DCtime;
+		 if(dorun < sizeof(stream1))
 		 {
-			 t1 = ec_DCtime;
+			stream1[dorun] = real_cycle;
+			stream2[dorun] = toff;
 		 }
-		 else
-		 {
-			 t2 = ec_DCtime;
-		 } 
 
-		 real_cycle = t1-t2;
-		stream1[dorun] = real_cycle;
-		stream2[dorun] = dorun;
          dorun++;
          /* if we have some digital output, cycle */
          //if( digout ) *digout = (uint8) ((dorun / 16) & 0xff);
@@ -529,6 +514,11 @@ int main(int argc, char *argv[])
 	// pcap_t *adhandle;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	
+	if (argc != 2 || atoi(argv[1]) < 100)
+	{
+		printf("Usage : app.exe [cycletime]\n Cycletime in microseconds > 100");
+		return(0);
+	}
 
 	dorun = 0;
 	cycleTime = atoi(argv[1]);

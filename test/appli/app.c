@@ -144,7 +144,7 @@ void simpletest(char *ifname) //ifname name of interface
 			
 			ec_configdc(); // config distributed clocks
 			
-						for(i = 1; i<= ec_slavecount; i++)
+			for(i = 1; i<= ec_slavecount; i++)
 			{
 				printf("dcsync%d\n",i);
 				ec_dcsync01(i,TRUE,cycleTime*1000,cycleTime*1000,0);

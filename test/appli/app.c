@@ -118,6 +118,46 @@ void outPDO32(int slave, uint32_t data)
 	}
 }
 
+/* Mailbox handler attempt
+no external protocol required
+
+Returns 1 if success, 0 if failed*/
+int mbxhandler(int slave, uint8_t *mbxDataIn, uint8_t *mbxDataOut)
+{
+	int wkc = 0;
+	ec_mbxbuft mbxIn, mbxOut;
+	uint32_t retval;
+	/*check mbx state (new data? slave ack ?)*/
+	if((ec_mbxreceive(slave, &mbxIn,EC_TIMEOUTRXM) < 1) || mbxIn == )
+	{
+		printf("Mailbox handling failed\n");
+		return 0;
+	}
+	/*Ccheck if value is changed*/
+	
+	/*Clear mbx buffer*/
+	ec_clearmbx(&mbxIn);
+
+	/*Format and send data */
+	uint16_t maxdata = ec_slave[slave].mbx_l - 0x10;
+	if(*mbxData < maxdata)
+	{
+		wkc = ec_mbxsend(slave, &mbxOut,EC_TIMEOUTRXM);
+		if(wkc<1)
+		{
+			printf("Mailbox handling failed\n");
+			return 0;
+		}
+	}
+
+	/*Receive response*/
+
+
+
+
+	return 1;
+
+}
 
 /* taken from simple_test example
 Contains initialization of interface and slaves
@@ -150,7 +190,7 @@ void simpletest(char *ifname) //ifname name of interface
 				ec_dcsync01(i,TRUE,cycleTime*1000,cycleTime*1000,0);
 			// 	ec_dcsync0(i,TRUE,cycleTime,0);
 			}
-
+			
 			ec_config_map(&IOmap); //configuration of the IO Map of devices
 
 			

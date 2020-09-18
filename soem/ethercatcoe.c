@@ -344,7 +344,7 @@ int ecx_SDOwrite(ecx_contextt *context, uint16 Slave, uint16 Index, uint8 SubInd
    ec_clearmbx(&MbxOut);
    aSDOp = (ec_SDOt *)&MbxIn;
    SDOp = (ec_SDOt *)&MbxOut;
-   maxdata = context->slavelist[Slave].mbx_l - 0x10; /* data section=mailbox size - 6 mbx - 2 CoE - 8 sdo req */
+   maxdata = context->slavelist[Slave].mbx_l - 0x10; /* data section = mailbox size - 6 mbx - 2 CoE - 8 sdo req */
    /* if small data use expedited transfer */
    if ((psize <= 4) && !CA)
    {

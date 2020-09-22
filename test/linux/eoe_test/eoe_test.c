@@ -19,12 +19,16 @@
  *
  * (c)Arthur Ketels 2010 - 2011
  */
+#define HAVE_REMOTE
 
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
 
 #include "ethercat.h"
+#include "misc.h"
+#include <pcap.h>
+
 
 #define EC_TIMEOUTMON 500
 
@@ -400,15 +404,68 @@ OSAL_THREAD_FUNC ecatcheck( void *ptr )
 int main(int argc, char *argv[])
 {
    printf("SOEM (Simple Open EtherCAT Master)\nEoE test\n");
+	pcap_if_t *alldevs;
+	pcap_if_t *d;
+	int inum;
+	int i = 0;
+	// pcap_t *adhandle;
+	char errbuf[PCAP_ERRBUF_SIZE];
+	
 
-   if (argc > 1)
+	/* Load Npcap and its functions. */
+	if (!LoadNpcapDlls())
+	{
+		fprintf(stderr, "Couldn't load Npcap\n");
+		exit(1);
+	}
+
+	/* Retrieve the device list on the local machine */
+	if (pcap_findalldevs_ex(PCAP_SRC_IF_STRING, NULL, &alldevs, errbuf) == -1)
+	{
+		fprintf(stderr, "Error in pcap_findalldevs: %s\n", errbuf);
+		exit(1);
+	}
+
+	/* Print the list */
+	for (d = alldevs; d; d = d->next)
+	{
+		printf("%d. %s", ++i, d->name);
+		if (d->description)
+			printf(" (%s)\n", d->description);
+		else
+			printf(" (No description available)\n");
+	}
+
+	/* if no interface found*/
+	if (i == 0)
+	{
+		printf("\nNo interfaces found! Make sure Npcap is installed.\n");
+		return -1;
+	}
+
+	/* ask for user input*/
+	printf("Enter the interface number (1-%d):", i);
+	scanf_s("%d", &inum);
+
+	if (inum < 1 || inum > i)
+	{
+		printf("\nInterface number out of range.\n");
+		/* Free the device list */
+		pcap_freealldevs(alldevs);
+		return -1;
+	}
+
+	/* Jump to the selected adapter */
+	for (d = alldevs, i = 0; i < inum - 1; d = d->next, i++)
+		;
+   if (argc > 0)
    {
       /* create thread to handle slave error handling in OP */
 //      pthread_create( &thread1, NULL, (void *) &ecatcheck, (void*) &ctime);
       osal_thread_create(&thread1, 128000, &ecatcheck, (void*) &ctime);
 
       /* start cyclic part */
-      teststarter(argv[1]);
+      teststarter(d->name);
    }
    else
    {

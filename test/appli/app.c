@@ -38,7 +38,7 @@ uint8 ob;
 uint16 ob2;
 uint8 *digout = 0;
 char IOmap[4096];
-OSAL_THREAD_HANDLE thread1, thread2;
+OSAL_THREAD_HANDLE thread1, thread2, thread3;
 int expectedWKC;
 boolean needlf;
 volatile int wkc;
@@ -52,6 +52,7 @@ int64 t1,t2;
 int64 real_cycle;
 int64 prev_real_cycle;
 int64 jitt;
+uint8 txbuf[1024];
 
 
 /* pcap packet handler declaration*/
@@ -126,9 +127,9 @@ int mbxhandler(int slave, uint8_t *mbxDataIn, uint8_t *mbxDataOut)
 {
 	int wkc = 0;
 	ec_mbxbuft mbxIn, mbxOut;
-	uint32_t retval;
+	//uint32_t retval;
 	/*check mbx state (new data? slave ack ?)*/
-	if((ec_mbxreceive(slave, &mbxIn,EC_TIMEOUTRXM) < 1) || mbxIn == )
+	if(ec_mbxreceive(slave, &mbxIn,EC_TIMEOUTRXM) < 1)
 	{
 		printf("Mailbox handling failed\n");
 		return 0;
@@ -140,7 +141,7 @@ int mbxhandler(int slave, uint8_t *mbxDataIn, uint8_t *mbxDataOut)
 
 	/*Format and send data */
 	uint16_t maxdata = ec_slave[slave].mbx_l - 0x10;
-	if(*mbxData < maxdata)
+	if(*mbxDataIn < maxdata)
 	{
 		wkc = ec_mbxsend(slave, &mbxOut,EC_TIMEOUTRXM);
 		if(wkc<1)
@@ -157,6 +158,37 @@ int mbxhandler(int slave, uint8_t *mbxDataIn, uint8_t *mbxDataOut)
 
 	return 1;
 
+}
+
+OSAL_THREAD_FUNC mailbox_reader(void *lpParam)
+{
+   ecx_contextt *context = (ecx_contextt *)lpParam;
+   int wkc;
+   ec_mbxbuft MbxIn;
+   ec_mbxheadert * MbxHdr = (ec_mbxheadert *)MbxIn;
+
+   int ixme;
+   ec_setupheader(&txbuf);
+   for (ixme = 0; ixme < sizeof(txbuf); ixme++)
+   {
+      txbuf[ixme] = (uint8)rand();
+   }
+   /* Send a made up frame to trigger a fragmented transfer
+   * Used with a special bound impelmentaion of SOES. Will
+   * trigger a fragmented transfer back of the same frame.
+   */
+   wkc = ecx_mbxsend(context, 1, (ec_mbxbuft *) txbuf, EC_TIMEOUTRXM );
+
+   for (;;)
+   {
+      /* Read mailbox if no other mailbox conversation is ongoing  eg. SDOwrite/SDOwrite etc.*/
+      wkc = ecx_mbxreceive(context, 1, (ec_mbxbuft *)&MbxIn, 0);
+      if (wkc > 0)
+      {
+         printf("Unhandled mailbox response 0x%x\n", MbxHdr->mbxtype);
+      }
+      osal_usleep(1 * 1000 * 1000);
+   }
 }
 
 /* taken from simple_test example
@@ -201,6 +233,8 @@ void simpletest(char *ifname) //ifname name of interface
 			/* wait for all slaves to reach SAFE_OP state */
 			ec_statecheck(0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE * 4);
 			
+			/*launch mailbox handler thread*/
+			osal_thread_create(&thread3, 128000, &mailbox_reader, &ecx_context);
 
 			/* Print number of segments/branches in network*/
 

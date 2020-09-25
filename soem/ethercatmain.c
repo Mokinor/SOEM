@@ -976,6 +976,7 @@ int ecx_mbxsend(ecx_contextt *context, uint16 slave,ec_mbxbuft *mbx, int timeout
       if (ecx_mbxempty(context, slave, timeout))
       {
          mbxwo = context->slavelist[slave].mbx_wo;
+         printf("Writing mbx @configaddr :%x \n",configadr);
          /* write slave in mailbox */
          wkc = ecx_FPWR(context->port, configadr, mbxwo, mbxl, mbx, EC_TIMEOUTRET3);
       }

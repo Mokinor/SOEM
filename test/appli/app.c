@@ -41,7 +41,7 @@ char IOmap[4096];
 OSAL_THREAD_HANDLE thread1, thread2, thread3;
 int expectedWKC;
 boolean needlf;
-volatile int wkc;
+volatile int globalWkc;
 boolean inOP;
 uint8 currentgroup = 0;
 int32 outData,inData;
@@ -52,7 +52,8 @@ int64 t1,t2;
 int64 real_cycle;
 int64 prev_real_cycle;
 int64 jitt;
-uint8 txbuf[1024];
+uint8 txbuf[128];
+uint8 rxbuf[128];
 
 
 /* pcap packet handler declaration*/
@@ -125,7 +126,7 @@ no external protocol required
 Returns 1 if success, 0 if failed*/
 int mbxhandler(int slave, uint8_t *mbxDataIn, uint8_t *mbxDataOut)
 {
-	int wkc = 0;
+	int mbxWkc = 0;
 	ec_mbxbuft mbxIn, mbxOut;
 	//uint32_t retval;
 	/*check mbx state (new data? slave ack ?)*/
@@ -143,8 +144,8 @@ int mbxhandler(int slave, uint8_t *mbxDataIn, uint8_t *mbxDataOut)
 	uint16_t maxdata = ec_slave[slave].mbx_l - 0x10;
 	if(*mbxDataIn < maxdata)
 	{
-		wkc = ec_mbxsend(slave, &mbxOut,EC_TIMEOUTRXM);
-		if(wkc<1)
+		mbxWkc = ec_mbxsend(slave, &mbxOut,EC_TIMEOUTRXM);
+		if(mbxWkc<1)
 		{
 			printf("Mailbox handling failed\n");
 			return 0;
@@ -160,35 +161,82 @@ int mbxhandler(int slave, uint8_t *mbxDataIn, uint8_t *mbxDataOut)
 
 }
 
+
+/* header creation function*/
+void makeHeader(uint8_t *mbx, uint16_t length, int slave)
+{
+	uint16_t address = ec_slave[slave].configadr;
+	uint8_t address_H = (uint8_t) (address >> 8);
+	uint8_t address_L = (uint8_t) address;
+	uint8_t length_H = (uint8_t) (length >> 8);
+	uint8_t length_L = (uint8_t) length;
+	uint8_t type = 0xF0;
+	mbx[0] = length_H;
+	mbx[1] = length_L;
+	mbx[2] = address_H;
+	mbx[3] = 0x00;
+	mbx[4] = type;
+}
+
 OSAL_THREAD_FUNC mailbox_reader(void *lpParam)
 {
    ecx_contextt *context = (ecx_contextt *)lpParam;
-   int wkc;
+   int mbxWkc;
    ec_mbxbuft MbxIn;
-   ec_mbxheadert * MbxHdr = (ec_mbxheadert *)MbxIn;
+   ec_mbxheadert * MbxHdr = (ec_mbxheadert *) MbxIn;
+
+
+   //ec_mbxheadert * MbxHdr = (ec_mbxheadert *) MbxIn;
+
+//    MbxHdr->address = ec_slave[1].aliasadr;
+//    MbxHdr->length = 128 - 48;
+//    MbxHdr->mbxtype = 0xF;
+//    MbxHdr->priority = 0;
+// 	MbxHdr = (ec_mbxheadert *) MbxIn;
+// 	MbxHdr = (ec_mbxheadert *) txbuf;
 
    int ixme;
-   ec_setupheader(&txbuf);
-   for (ixme = 0; ixme < sizeof(txbuf); ixme++)
+   //ec_setupheader(&txbuf);
+   for (ixme = 5; ixme < sizeof(txbuf); ixme++)
    {
-      txbuf[ixme] = (uint8)rand();
+      txbuf[ixme] = ixme;
    }
    /* Send a made up frame to trigger a fragmented transfer
    * Used with a special bound impelmentaion of SOES. Will
    * trigger a fragmented transfer back of the same frame.
    */
-   wkc = ecx_mbxsend(context, 1, (ec_mbxbuft *) txbuf, EC_TIMEOUTRXM );
-
-   for (;;)
-   {
-      /* Read mailbox if no other mailbox conversation is ongoing  eg. SDOwrite/SDOwrite etc.*/
-      wkc = ecx_mbxreceive(context, 1, (ec_mbxbuft *)&MbxIn, 0);
-      if (wkc > 0)
-      {
-         printf("Unhandled mailbox response 0x%x\n", MbxHdr->mbxtype);
-      }
-      osal_usleep(1 * 1000 * 1000);
-   }
+  	makeHeader( txbuf, sizeof(txbuf) - 6, 1);
+   mbxWkc = ecx_mbxsend(context, 1, (ec_mbxbuft *) txbuf, EC_TIMEOUTRXM );
+	if(mbxWkc < 1)
+	{
+		printf("Error mbxWkc = %d\n", mbxWkc);
+	}
+	osal_usleep(1 * 1000 * 1000);
+	 mbxWkc = ecx_mbxreceive(context, 1, (ec_mbxbuft *)&MbxIn, 0);
+	  printf("Wkc : %d", mbxWkc);
+	  for (int j = 0;  j < sizeof(MbxIn) ; j++)
+	  {
+		  printf("MbxIn[%d] = %x \n",j,MbxIn[j]);
+	  }
+//    for (;;)
+//    {
+//       /* Read mailbox if no other mailbox conversation is ongoing  eg. SDOwrite/SDOwrite etc.*/
+	 
+//       mbxWkc = ecx_mbxreceive(context, 1, (ec_mbxbuft *)&rxbuf, EC_TIMEOUTRXM);
+// 	  printf("Wkc : %d", mbxWkc);
+// 	  for (int j = 0;  j < sizeof(rxbuf) ; j++)
+// 	  {
+// 		  printf("MbxIn[%d] = %x \n",j,rxbuf[j]);
+// 	  }
+	  
+// 	  printf("Mbx : %x, %x, %x\n", MbxIn[0], MbxIn[1], MbxIn[2]);
+//       if (mbxWkc > 0)
+//       {
+//          printf("Unhandled mailbox response 0x%x\n", MbxHdr->mbxtype);
+//       }
+//       osal_usleep(1000 * 1000 * 1000);
+// 	  //mbxWkc = ecx_mbxsend(context, 1, (ec_mbxbuft *) txbuf, EC_TIMEOUTRXM );
+//  }
 }
 
 /* taken from simple_test example
@@ -290,7 +338,7 @@ void simpletest(char *ifname) //ifname name of interface
 					#ifdef PRINT_OUT
 						int j;
                			printf("Processdata cycle %5d , Wck %2d, DCtime %12lld, ct %9lld, Jitter %9lld, O:",
-                  		dorun, wkc , ec_DCtime, real_cycle,jitt);
+                  		dorun, globalWkc , ec_DCtime, real_cycle,jitt);
 
 						/*jitter calculation*/
 						jitt = real_cycle - prev_real_cycle;
@@ -316,7 +364,7 @@ void simpletest(char *ifname) //ifname name of interface
 						needlf = TRUE;
 						fflush(stdout);
 					/* sleep time to not overload CPU*/
-					osal_usleep(1000);
+					osal_usleep(1000000);
 				}
 				dorun = 0;
 				inOP = FALSE;
@@ -464,7 +512,7 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 	  osal_usleep((cycletime + toff)/ 1000);
       if (dorun>0)
       {
-         wkc = ec_receive_processdata(EC_TIMEOUTRET);
+         globalWkc = ec_receive_processdata(EC_TIMEOUTRET);
 		 
 		t1 = ec_DCtime;
 		real_cycle = t1-t2;
@@ -501,8 +549,9 @@ OSAL_THREAD_FUNC ecatcheck(void *ptr)
 
 	while (1)
 	{
-		if (inOP && ((wkc < expectedWKC) || ec_group[currentgroup].docheckstate))
+		if (inOP && ((globalWkc < expectedWKC) || ec_group[currentgroup].docheckstate))
 		{
+			printf("Expected %d and got %d ", expectedWKC,globalWkc);
 			if (needlf)
 			{
 				needlf = FALSE;

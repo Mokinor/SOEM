@@ -1034,7 +1034,7 @@
         <Sm MinSize="34" MaxSize="128" DefaultSize="128" StartAddress="#x1080" ControlByte="#x22" Enable="1">MBoxIn</Sm>
         <Sm StartAddress="#x1600" ControlByte="#x44" Enable="9">Outputs</Sm>
         <Sm StartAddress="#x1A00" ControlByte="#x00" Enable="1">Inputs</Sm>
-        <RxPdo Sm="0">
+        <RxPdo Sm="2">
           <Index>#x1600</Index>
           <Name>RxPdo</Name>
           <Entry>
@@ -1045,7 +1045,7 @@
             <DataType>UDINT</DataType>
           </Entry>
         </RxPdo>
-        <TxPdo Sm="1">
+        <TxPdo Sm="3">
           <Index>#x1A00</Index>
           <Name>TxPdo</Name>
           <Entry>
@@ -1056,9 +1056,10 @@
             <DataType>UDINT</DataType>
           </Entry>
         </TxPdo>
-        <Mailbox DataLinkLayer="true">
-          <CoE CompleteAccess="false" PdoUpload="false" SdoInfo="true"/>
+        <Mailbox DataLinkLayer="false">
+          <CoE />
           <FoE />
+          <VoE />
         </Mailbox>
         <Dc>
         <OpMode>

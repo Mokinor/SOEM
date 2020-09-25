@@ -214,7 +214,7 @@ OSAL_THREAD_FUNC mailbox_reader(void *lpParam)
 	osal_usleep(1 * 1000 * 1000);
 	 mbxWkc = ecx_mbxreceive(context, 1, (ec_mbxbuft *)&MbxIn, 0);
 	  printf("Wkc : %d", mbxWkc);
-	  for (int j = 0;  j < sizeof(MbxIn) ; j++)
+	  for (int j = 0;  j < sizeof(txbuf) ; j++)
 	  {
 		  printf("MbxIn[%d] = %x \n",j,MbxIn[j]);
 	  }

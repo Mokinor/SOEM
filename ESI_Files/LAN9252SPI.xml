@@ -1056,7 +1056,7 @@
             <DataType>UDINT</DataType>
           </Entry>
         </TxPdo>
-        <Mailbox DataLinkLayer="false">
+        <Mailbox DataLinkLayer="true">
           <CoE />
           <FoE />
           <VoE />

@@ -1021,6 +1021,7 @@ int ecx_mbxreceive(ecx_contextt *context, uint16 slave, ec_mbxbuft *mbx, int tim
          SMstat = 0;
          wkc = ecx_FPRD(context->port, configadr, ECT_REG_SM1STAT, sizeof(SMstat), &SMstat, EC_TIMEOUTRET);
          SMstat = etohs(SMstat);
+         //printf("read SM1 @configadr : %x \n",configadr);
          if (((SMstat & 0x08) == 0) && (timeout > EC_LOCALDELAY))
          {
             osal_usleep(EC_LOCALDELAY);
@@ -1030,6 +1031,7 @@ int ecx_mbxreceive(ecx_contextt *context, uint16 slave, ec_mbxbuft *mbx, int tim
 
       if ((wkc > 0) && ((SMstat & 0x08) > 0)) /* read mailbox available ? */
       {
+         printf("Read mbx found \n");
          mbxro = context->slavelist[slave].mbx_ro;
          mbxh = (ec_mbxheadert *)mbx;
          do

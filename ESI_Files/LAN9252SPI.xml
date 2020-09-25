@@ -1032,8 +1032,8 @@
         <Fmmu>MBoxState</Fmmu>
         <Sm MinSize="34" MaxSize="128" DefaultSize="128" StartAddress="#x1000" ControlByte="#x26" Enable="1">MBoxOut</Sm>
         <Sm MinSize="34" MaxSize="128" DefaultSize="128" StartAddress="#x1080" ControlByte="#x22" Enable="1">MBoxIn</Sm>
-        <Sm StartAddress="#x1600" ControlByte="#x44" Enable="9">Outputs</Sm>
-        <Sm StartAddress="#x1A00" ControlByte="#x00" Enable="1">Inputs</Sm>
+        <Sm StartAddress="#x1600" ControlByte="#x64" Enable="9">Outputs</Sm>
+        <Sm StartAddress="#x1A00" ControlByte="#x20" Enable="1">Inputs</Sm>
         <RxPdo Sm="2">
           <Index>#x1600</Index>
           <Name>RxPdo</Name>
@@ -1057,8 +1057,6 @@
           </Entry>
         </TxPdo>
         <Mailbox DataLinkLayer="true">
-          <CoE />
-          <FoE />
           <VoE />
         </Mailbox>
         <Dc>

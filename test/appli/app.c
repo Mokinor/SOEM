@@ -199,25 +199,26 @@ OSAL_THREAD_FUNC mailbox_reader(void *lpParam)
    //ec_setupheader(&txbuf);
    for (ixme = 5; ixme < sizeof(txbuf); ixme++)
    {
-      txbuf[ixme] = ixme;
+		txbuf[ixme] = ixme;
    }
    /* Send a made up frame to trigger a fragmented transfer
    * Used with a special bound impelmentaion of SOES. Will
    * trigger a fragmented transfer back of the same frame.
    */
   	makeHeader( txbuf, sizeof(txbuf) - 6, 1);
-   mbxWkc = ecx_mbxsend(context, 1, (ec_mbxbuft *) txbuf, EC_TIMEOUTRXM );
+    mbxWkc = ecx_mbxsend(context, 1, (ec_mbxbuft *) txbuf, EC_TIMEOUTRXM );
 	if(mbxWkc < 1)
 	{
 		printf("Error mbxWkc = %d\n", mbxWkc);
 	}
 	osal_usleep(1 * 1000 * 1000);
-	 mbxWkc = ecx_mbxreceive(context, 1, (ec_mbxbuft *)&MbxIn, 0);
-	  printf("Wkc : %d", mbxWkc);
-	  for (int j = 0;  j < sizeof(txbuf) ; j++)
-	  {
-		  printf("MbxIn[%d] = %x \n",j,MbxIn[j]);
-	  }
+	mbxWkc = ecx_mbxreceive(context, 1, (ec_mbxbuft *)&MbxIn, 0);
+	printf("Wkc : %d", mbxWkc);
+	for (int j = 0;  j < sizeof(txbuf) ; j++)
+	{
+		
+		printf("MbxIn[%d] = %x \n",j,MbxIn[j]);
+	}
 //    for (;;)
 //    {
 //       /* Read mailbox if no other mailbox conversation is ongoing  eg. SDOwrite/SDOwrite etc.*/
@@ -469,7 +470,7 @@ static void  nanosleep (struct timespec *requested_delay)
     do                         // for nanoseconds part  
      {  
       QueryPerformanceCounter (&stop);  
-      printf("Boucle ********");
+      
 	
      }  while (!(stop.QuadPart >= expected_counter));
    }  
@@ -527,9 +528,9 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
          /* if we have some digital output, cycle */
          //if( digout ) *digout = (uint8) ((dorun / 16) & 0xff);
 		outPDO32(1,outData);
-		outPDO32(2,outData);
-		outPDO32(3,outData);
-		outPDO32(4,outData);
+		//outPDO32(2,outData);
+		//outPDO32(3,outData);
+		//outPDO32(4,outData);
          if (ec_slave[0].hasdc)
          {
             /* calulate toff to get linux time and DC synced */
@@ -684,8 +685,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* Jump to the selected adapter */
-	for (d = alldevs, i = 0; i < inum - 1; d = d->next, i++)
-		;
+	for (d = alldevs, i = 0; i < inum - 1; d = d->next, i++);
 
 	printf("SOEM (Simple Open EtherCAT Master)\nTest app\n");
 

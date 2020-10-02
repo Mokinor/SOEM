@@ -23,7 +23,7 @@
 #define EC_TIMEOUTMON 500
 #define stack64k (64 * 1024)
 #define print_num 100000 
-#define PRINT_OUT 
+//#define PRINT_OUT 
 
 /*	Variable declarations	*/
 long NSEC_PER_SEC = 1000000000i64;
@@ -211,33 +211,24 @@ OSAL_THREAD_FUNC mailbox_reader(void *lpParam)
 	{
 		printf("Error mbxWkc = %d\n", mbxWkc);
 	}
-	osal_usleep(1 * 1000 * 1000);
-	mbxWkc = ecx_mbxreceive(context, 1, (ec_mbxbuft *)&MbxIn, 0);
-	printf("Wkc : %d", mbxWkc);
-	for (int j = 0;  j < sizeof(txbuf) ; j++)
-	{
-		
-		printf("MbxIn[%d] = %x \n",j,MbxIn[j]);
-	}
-//    for (;;)
-//    {
-//       /* Read mailbox if no other mailbox conversation is ongoing  eg. SDOwrite/SDOwrite etc.*/
+	
+
+	
+   for (;;)
+   {
+      /* Read mailbox if no other mailbox conversation is ongoing  eg. SDOwrite/SDOwrite etc.*/
 	 
-//       mbxWkc = ecx_mbxreceive(context, 1, (ec_mbxbuft *)&rxbuf, EC_TIMEOUTRXM);
-// 	  printf("Wkc : %d", mbxWkc);
-// 	  for (int j = 0;  j < sizeof(rxbuf) ; j++)
-// 	  {
-// 		  printf("MbxIn[%d] = %x \n",j,rxbuf[j]);
-// 	  }
+      mbxWkc = ecx_mbxreceive(context, 1, (ec_mbxbuft *)&rxbuf, EC_TIMEOUTRXM);
+	  printf("Wkc : %d", mbxWkc);
+	  for (int j = 0;  j < sizeof(rxbuf) ; j++)
+	  {
+		  printf("MbxIn[%d] = %x \n",j,rxbuf[j]);
+	  }
 	  
-// 	  printf("Mbx : %x, %x, %x\n", MbxIn[0], MbxIn[1], MbxIn[2]);
-//       if (mbxWkc > 0)
-//       {
-//          printf("Unhandled mailbox response 0x%x\n", MbxHdr->mbxtype);
-//       }
-//       osal_usleep(1000 * 1000 * 1000);
-// 	  //mbxWkc = ecx_mbxsend(context, 1, (ec_mbxbuft *) txbuf, EC_TIMEOUTRXM );
-//  }
+	  mbxWkc = ecx_mbxsend(context, 1, (ec_mbxbuft *) txbuf, EC_TIMEOUTRXM );
+      osal_usleep(10000 * 1000);
+	  //mbxWkc = ecx_mbxsend(context, 1, (ec_mbxbuft *) txbuf, EC_TIMEOUTRXM );
+ }
 }
 
 /* taken from simple_test example
@@ -283,7 +274,7 @@ void simpletest(char *ifname) //ifname name of interface
 			ec_statecheck(0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE * 4);
 			
 			/*launch mailbox handler thread*/
-			osal_thread_create(&thread3, 128000, &mailbox_reader, &ecx_context);
+			//osal_thread_create(&thread3, 128000, &mailbox_reader, &ecx_context);
 
 			/* Print number of segments/branches in network*/
 
@@ -528,7 +519,7 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
          /* if we have some digital output, cycle */
          //if( digout ) *digout = (uint8) ((dorun / 16) & 0xff);
 		outPDO32(1,outData);
-		//outPDO32(2,outData);
+		outPDO32(2,outData);
 		//outPDO32(3,outData);
 		//outPDO32(4,outData);
          if (ec_slave[0].hasdc)
@@ -634,7 +625,7 @@ int main(int argc, char *argv[])
 	
 	if (argc != 2 || atoi(argv[1]) < 100)
 	{
-		printf("Usage : app.exe [cycletime]\n Cycletime in microseconds > 100");
+		printf("Usage : app.exe [cycletime]\n Cycletime in microseconds >1000");
 		return(0);
 	}
 

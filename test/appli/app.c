@@ -91,22 +91,22 @@ int output_csv(int length)
 concatenation of slave inputs to an int for better printing and processing
 \param slave slave number
 */
-int32 inPDO32(int slave)
+uint32_t inPDO32(int slave)
 {
-	int32 res;
+	uint32_t res;
 	uint32_t b0,b1,b2,b3;
 	int slaveOffset = 0;
 	/* calculate offest in IOmap based on slave number */
 	if(slave > 1)
 	{
-		slaveOffset = (slave-1)*4;
+		slaveOffset = ec_slavecount*(ec_slave[1].Obits/8) + (slave-1)*(ec_slave[1].Ibits/8);
 	}
-	b0 = ec_slave[0].inputs[3 + slaveOffset];
-	b1 = ec_slave[0].inputs[2 + slaveOffset];
-	b2 = ec_slave[0].inputs[1 + slaveOffset];
+	b0 = ec_slave[0].inputs[3 + slaveOffset] << 24;
+	b1 = ec_slave[0].inputs[2 + slaveOffset] << 16;
+	b2 = ec_slave[0].inputs[1 + slaveOffset] << 8;
 	b3 = ec_slave[0].inputs[0 + slaveOffset];
 
-	res = b0 | b1 | b2 | b3 ;
+	res = b0 | b1 | b2 | b3;
 	return res;
 }
 
@@ -118,11 +118,12 @@ void outPDO32(int slave, uint32_t data)
 	/* calculate offest in IOmap based on slave number */
 	if(slave > 1)
 	{
-		slaveOffset = (slave-1) * (ec_slave[1].Obits/4);
+		slaveOffset = (slave-1) * (ec_slave[1].Obits/8);
+		//slaveOffset = ec_slave[slave].Ostartbit;
 	}
 	for (int i = 0 + slaveOffset; i < 3 + slaveOffset ;i++)
 	{
-		ec_slave[0].outputs[i]= (uint8_t)((data*slave) >> (8*i));
+		ec_slave[0].outputs[i]= (uint8_t)((data+slave) >> (8*i));
 	}
 }
 

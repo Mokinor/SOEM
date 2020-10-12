@@ -5,7 +5,7 @@
 
  /* Merging of Npcap library examples with SOEM library
  Npcap discovers the compatible interfaces and SOEM runs on one of them.*/
-
+//#define HAVE_REMOTE
 
 /*	INCLUDES */
 #include <stdio.h>
@@ -23,7 +23,7 @@
 #define EC_TIMEOUTMON 500
 #define stack64k (64 * 1024)
 #define print_num 100000
-//#define PRINT_OUT
+#define PRINT_OUT
 //#define PRINT_PDO
 
 /*	Variable declarations	*/

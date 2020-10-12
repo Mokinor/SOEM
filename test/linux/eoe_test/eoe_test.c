@@ -85,11 +85,11 @@ int eoe_hook(ecx_contextt * context, uint16 slave, void * eoembx)
          /* Sanity check that received buffer still is OK */
          if (sizeof(txbuf) != size_of_rx)
          {
-            printf("Size differs, expected %d , received %d\n", sizeof(txbuf), size_of_rx);
+            printf("Size differs, expected %zd , received %d\n", sizeof(txbuf), size_of_rx);
          }
          else
          {
-            printf("Size OK, expected %d , received %d\n", sizeof(txbuf), size_of_rx);
+            printf("Size OK, expected %zd , received %d\n", sizeof(txbuf), size_of_rx);
          }
          /* Check that the TX and RX frames are EQ */
          if (memcmp(rxbuf, txbuf, size_of_rx))

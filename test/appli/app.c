@@ -502,25 +502,25 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 	  {
 		 globalWkc = ec_receive_processdata(EC_TIMEOUTRET);
 
-		t1 = ec_DCtime;
-		real_cycle = t1-t2;
-		t2 = ec_DCtime;
+		// t1 = ec_DCtime;
+		// real_cycle = t1-t2;
+		// t2 = ec_DCtime;
 		inData = inPDO32(1);
-		 if(dorun < (print_num + nbOfFilesOut*print_num))
-		 {
-			stream1[dorun-(print_num*nbOfFilesOut)] = real_cycle;
-			stream2[dorun-(print_num*nbOfFilesOut)] = toff;
-			stream3[dorun-(print_num*nbOfFilesOut)] = inData;
-			stream4[dorun-(print_num*nbOfFilesOut)] = ec_DCtime;
-		 } 
-		 else
-		 {
-			while(!output_csv(print_num))
-			{
-				printf("Output\n");
-			}
-			nbOfFilesOut++;
-		 }
+		//  if(dorun < (print_num + nbOfFilesOut*print_num))
+		//  {
+		// 	stream1[dorun-(print_num*nbOfFilesOut)] = real_cycle;
+		// 	stream2[dorun-(print_num*nbOfFilesOut)] = toff;
+		// 	stream3[dorun-(print_num*nbOfFilesOut)] = inData;
+		// 	stream4[dorun-(print_num*nbOfFilesOut)] = ec_DCtime;
+		//  } 
+		//  else
+		//  {
+		// 	while(!output_csv(print_num))
+		// 	{
+		// 		printf("Output\n");
+		// 	}
+		// 	nbOfFilesOut++;
+		//  }
 
 
 
@@ -537,7 +537,6 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 			/* calulate toff to get linux time and DC synced */
 			ec_sync(ec_DCtime, cycletime, &toff);
 		 }
-		 printf("Rx : %x\n",inData);
 		 ec_send_processdata();
 	  }
    }

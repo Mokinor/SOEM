@@ -23,7 +23,7 @@
 #define EC_TIMEOUTMON 500
 #define stack64k (64 * 1024)
 #define print_num 100000
-#define PRINT_OUT
+//#define PRINT_OUT
 //#define PRINT_PDO
 
 /*	Variable declarations	*/
@@ -142,12 +142,12 @@ int mbxhandler(int slave, uint8_t *mbxDataIn, uint8_t *mbxDataOut)
 		printf("Mailbox handling failed\n");
 		return 0;
 	}
-	/*Ccheck if value is changed*/
+	/*Check if value has changed*/
 
 	/*Clear mbx buffer*/
 	ec_clearmbx(&mbxIn);
 
-	/*Format and send data */
+	/*Shape and send data */
 	uint16_t maxdata = ec_slave[slave].mbx_l - 0x10;
 	if(*mbxDataIn < maxdata)
 	{
@@ -323,12 +323,6 @@ void simpletest(char *ifname) //ifname name of interface
 				// for (i = 1; i <= print_num; i++)
 				while(1)
 				{
-
-
-
-					// refresh input value for next loop
-
-
 
 					#ifdef PRINT_OUT
 
@@ -543,6 +537,7 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 			/* calulate toff to get linux time and DC synced */
 			ec_sync(ec_DCtime, cycletime, &toff);
 		 }
+		 printf("Rx : %x\n",inData);
 		 ec_send_processdata();
 	  }
    }

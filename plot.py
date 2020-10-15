@@ -19,7 +19,7 @@ nbOfbytes = []
 inpdo = []
 equalTime = 0
 missedVal = 0
-
+cycleTime = []
 def plot_results():
     """plot data"""
     print('plotting')
@@ -27,11 +27,11 @@ def plot_results():
     ax1 = pyplot.subplot(211)
     ax1.set_ylabel("Trames entre 2 itérations de TxPDO")
     ax1.grid(True)
-    ax1.plot(numpy.linspace(0,len(ecart),len(ecart)),ecart)
+    ax1.scatter(numpy.linspace(0,len(cycleTime),len(cycleTime)),cycleTime,marker='x')
     ax3 = pyplot.subplot(212)
     ax3.set_ylabel("Debit")
     ax3.grid(True)
-    ax3.plot(numpy.linspace(0,len(debit),len(debit)),debit)
+    ax3.scatter(numpy.linspace(0,len(debit),len(debit)),debit)
     pyplot.show()
     
 
@@ -64,13 +64,13 @@ def csv_parser(csvin):
     framesCount = 0
     prevvalue = 0
     equalTime = 0
-    missedVal = 0 
+    missedVal = 0
     # initialize and fetch useful data from csv
     prevtime = 0
     for row in allData:
         framesCount += 1
         pdoData = row['Data']
-        if int(row['Working Cnt'].split(',')[0],10) == 12 and int(pdoData[:1],16) != 0  :
+        if int(row['Working Cnt'].split(',')[0],10) == 12 and int(pdoData[:1],16) != 0:
             pdoData = row['Data']
             if pdoData != '':
                 pdoDataBa = (bytearray.fromhex(pdoData[:8]))
@@ -83,7 +83,7 @@ def csv_parser(csvin):
             else:
                 outpdo.append(0)
             if row['DC SysTime (0x910)'] != '':
-                ec_DCtime.append(int(row['DC SysTime (0x910)'],base=0))
+                ec_DCtime.append(int(row['DC SysTime (0x910)'],base=16)/1e9)
             else:
                 ec_DCtime.append(0)
             nbOfbytes.append(int(row['Length']))
@@ -98,9 +98,8 @@ def csv_parser(csvin):
 def time_calc():
     # time is 0 at start of csv
     intialtime = ec_DCtime[0]
-    for i in enumerate(ec_DCtime):
-        ec_DCtime[i[0]] -=  intialtime
-
+    for i,j in enumerate(ec_DCtime[:-1]):
+        cycleTime.append(ec_DCtime[i+1]-j)
 
     # time btw 2 frames
     # for x,y in enumerate(timeInSec[:-1]):
@@ -122,15 +121,15 @@ def time_calc():
 
 #main function
 def main(argv):
-    
     (fc,missedVal,equalTime) = csv_parser(arg_handler(argv))
     time_calc()
     print("Parsed",fc,"frames of data =",len(outpdo),"cycles\n")
     print("Found",equalTime,"frames with same Ws TimeStamp\n")
     print("There's",missedVal,"missed values (lost frames ?)\n")
     print("Average nb of frames per iter",round(sum(ecart)/len(ecart),2),"\n")
+    print("Cycle time (s) : Average",round(sum(cycleTime)/len(cycleTime),9),"Max : ",max(cycleTime))
+    print("min :",min(cycleTime))
     plot_results()
-    
 
     input("Press enter to exit ...")
 

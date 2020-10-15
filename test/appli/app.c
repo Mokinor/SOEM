@@ -55,8 +55,7 @@ int64 t1, t2;
 int64 real_cycle;
 int64 prev_real_cycle;
 int64 jitt;
-uint8 txbuf[128];
-uint8 rxbuf[128];
+
 int nbOfFilesOut = 0;
 
 /* pcap packet handler declaration*/
@@ -177,12 +176,43 @@ void makeHeader(uint8_t *mbx, uint16_t length, int slave)
 	mbx[4] = type;
 }
 
+uint8* split_buffer(uint8* buffer,int maxsize)
+{	
+	uint8* rx = malloc(maxsize);
+	int start = 0;
+	int splitting = 0;
+	for(int i = 0; i< sizeof(buffer);i++)
+	{
+		if(buffer[i] != 0)
+		{
+			if(i<(start+128))
+			{
+				rx[i] = buffer[i];
+				buffer[i] = 0;
+				splitting = 1;
+			} 
+			else 
+			{
+				return rx;
+			}
+		} 
+		else if (!splitting)
+		{
+			start++;
+		}
+	}
+	return rx;
+}
+
 OSAL_THREAD_FUNC mailbox_reader(void *lpParam)
 {
 	ecx_contextt *context = (ecx_contextt *)lpParam;
 	int mbxWkc;
 	ec_mbxbuft MbxIn;
 	ec_mbxheadert *MbxHdr = (ec_mbxheadert *)MbxIn;
+	uint8 txbuf[128];
+	uint8* rxbuf;
+	uint8* buftosend;
 
 	//ec_mbxheadert * MbxHdr = (ec_mbxheadert *) MbxIn;
 
@@ -193,37 +223,31 @@ OSAL_THREAD_FUNC mailbox_reader(void *lpParam)
 	// 	MbxHdr = (ec_mbxheadert *) MbxIn;
 	// 	MbxHdr = (ec_mbxheadert *) txbuf;
 
-	int ixme;
-	//ec_setupheader(&txbuf);
-	for (ixme = 5; ixme < sizeof(txbuf); ixme++)
-	{
-		txbuf[ixme] = ixme;
-	}
-	/* Send a made up frame to trigger a fragmented transfer
-   * Used with a special bound impelmentaion of SOES. Will
-   * trigger a fragmented transfer back of the same frame.
-   */
-	makeHeader(txbuf, sizeof(txbuf) - 6, 1);
-	mbxWkc = ecx_mbxsend(context, 1, (ec_mbxbuft *)txbuf, EC_TIMEOUTRXM);
-	if (mbxWkc < 1)
-	{
-		printf("Error mbxWkc = %d\n", mbxWkc);
-	}
 
 	for (;;)
-	{
-		/* Read mailbox if no other mailbox conversation is ongoing  eg. SDOwrite/SDOwrite etc.*/
+	{	
+		if(sizeof(buftosend)>128)
+		{
+			rxbuf = split_buffer(buftosend,128);
+		}
+		makeHeader(txbuf, sizeof(txbuf) - 6, 1);
+		/******** SEND *******/
 
+		mbxWkc = ecx_mbxsend(context, 1, (ec_mbxbuft *)txbuf, EC_TIMEOUTRXM);
+		if (mbxWkc < 1)
+		{
+			printf("Error mbxWkc = %d\n", mbxWkc);
+		}
+
+		/******* RECEIVE ******/
 		mbxWkc = ecx_mbxreceive(context, 1, (ec_mbxbuft *)&rxbuf, EC_TIMEOUTRXM);
 		printf("Wkc : %d", mbxWkc);
 		for (int j = 0; j < sizeof(rxbuf); j++)
 		{
 			printf("MbxIn[%d] = %x \n", j, rxbuf[j]);
 		}
-
-		mbxWkc = ecx_mbxsend(context, 1, (ec_mbxbuft *)txbuf, EC_TIMEOUTRXM);
 		osal_usleep(10000 * 1000);
-		//mbxWkc = ecx_mbxsend(context, 1, (ec_mbxbuft *) txbuf, EC_TIMEOUTRXM );
+		
 	}
 }
 
@@ -267,7 +291,7 @@ void simpletest(char *ifname) //ifname name of interface
 			ec_statecheck(0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE * 4);
 
 			/*launch mailbox handler thread*/
-			//osal_thread_create(&thread3, 128000, &mailbox_reader, &ecx_context);
+			osal_thread_create(&thread3, 128000, &mailbox_reader, &ecx_context);
 
 			/* Print number of segments/branches in network*/
 
@@ -462,6 +486,28 @@ int clock_gettime(struct timespec *spec)
 	return 0;
 }
 
+void capture_and_save()
+{
+	t1 = ec_DCtime;
+	real_cycle = t1 - t2;
+	t2 = ec_DCtime;
+	if (dorun < (print_num + nbOfFilesOut * print_num))
+	{
+		stream1[dorun - (print_num * nbOfFilesOut)] = real_cycle;
+		stream2[dorun - (print_num * nbOfFilesOut)] = toff;
+		stream3[dorun - (print_num * nbOfFilesOut)] = inData;
+		stream4[dorun - (print_num * nbOfFilesOut)] = ec_DCtime;
+	}
+	else
+	{
+		while (!output_csv(print_num))
+		{
+			printf("Output\n");
+		}
+		nbOfFilesOut++;
+	}
+}
+
 /* RT EtherCAT thread */
 OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 {
@@ -479,41 +525,13 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 	ec_send_processdata();
 	while (1)
 	{
-		/* calculate next cycle start */
-		// add_timespec(&ts, cycletime + toff);
-		/* wait to cycle start */
-		//printf("nanosecond wait : %d\n",cycletime + toff);
-		//   do
-		//   {
-		// 	  clock_gettime(&tleft);
-		//   }
-		//   while(!(tleft.tv_nsec >= ts.tv_nsec));
 
 		osal_usleep((cycletime + toff) / 1000);
 		if (dorun > 0)
 		{
 			globalWkc = ec_receive_processdata(EC_TIMEOUTRET);
-
-			// t1 = ec_DCtime;
-			// real_cycle = t1-t2;
-			// t2 = ec_DCtime;
+			capture_and_save();
 			inData = inPDO32(1);
-			//  if(dorun < (print_num + nbOfFilesOut*print_num))
-			//  {
-			// 	stream1[dorun-(print_num*nbOfFilesOut)] = real_cycle;
-			// 	stream2[dorun-(print_num*nbOfFilesOut)] = toff;
-			// 	stream3[dorun-(print_num*nbOfFilesOut)] = inData;
-			// 	stream4[dorun-(print_num*nbOfFilesOut)] = ec_DCtime;
-			//  }
-			//  else
-			//  {
-			// 	while(!output_csv(print_num))
-			// 	{
-			// 		printf("Output\n");
-			// 	}
-			// 	nbOfFilesOut++;
-			//  }
-
 			if (dorun = !UINT64_MAX)
 			{
 				dorun++;
@@ -522,200 +540,200 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 			{
 				dorun = 1;
 			}
-
-				/* if we have some digital output, cycle */
-				//if( digout ) *digout = (uint8) ((dorun / 16) & 0xff);
-				outData = inData;
-				for (int i = 1; i < ec_slavecount; i++)
-				{
-					outPDO32(i, outData);
-				}
-				if (ec_slave[0].hasdc)
-				{
-					/* calulate toff to get linux time and DC synced */
-					ec_sync(ec_DCtime, cycletime, &toff);
-				}
-				ec_send_processdata();
+			/* if we have some digital output, cycle */
+			//if( digout ) *digout = (uint8) ((dorun / 16) & 0xff);
+			outData = inData;
+			for (int i = 1; i < ec_slavecount; i++)
+			{
+				outPDO32(i, outData);
 			}
+			if (ec_slave[1].hasdc)
+			{
+				/* calulate toff to get linux time and DC synced */
+				printf("%d\n", toff);
+				ec_sync(ec_DCtime, cycletime, &toff);
+			}
+			ec_send_processdata();
 		}
 	}
+}
 
-	/* OS abstracted thread to manage errors */
-	OSAL_THREAD_FUNC ecatcheck(void *ptr)
+/* OS abstracted thread to manage errors */
+OSAL_THREAD_FUNC ecatcheck(void *ptr)
+{
+	int slave;
+	(void)ptr; /* Not used */
+
+	while (1)
 	{
-		int slave;
-		(void)ptr; /* Not used */
-
-		while (1)
+		if (inOP && ((globalWkc < expectedWKC) || ec_group[currentgroup].docheckstate))
 		{
-			if (inOP && ((globalWkc < expectedWKC) || ec_group[currentgroup].docheckstate))
+			printf("Expected %d and got %d ", expectedWKC, globalWkc);
+			if (needlf)
 			{
-				printf("Expected %d and got %d ", expectedWKC, globalWkc);
-				if (needlf)
+				needlf = FALSE;
+			}
+			/* one ore more slaves are not responding */
+			ec_group[currentgroup].docheckstate = FALSE;
+			ec_readstate();
+			for (slave = 1; slave <= ec_slavecount; slave++)
+			{
+				if ((ec_slave[slave].group == currentgroup) && (ec_slave[slave].state != EC_STATE_OPERATIONAL))
 				{
-					needlf = FALSE;
-				}
-				/* one ore more slaves are not responding */
-				ec_group[currentgroup].docheckstate = FALSE;
-				ec_readstate();
-				for (slave = 1; slave <= ec_slavecount; slave++)
-				{
-					if ((ec_slave[slave].group == currentgroup) && (ec_slave[slave].state != EC_STATE_OPERATIONAL))
+					ec_group[currentgroup].docheckstate = TRUE;
+					if (ec_slave[slave].state == (EC_STATE_SAFE_OP + EC_STATE_ERROR))
 					{
-						ec_group[currentgroup].docheckstate = TRUE;
-						if (ec_slave[slave].state == (EC_STATE_SAFE_OP + EC_STATE_ERROR))
-						{
-							printf("ERROR : slave %d is in SAFE_OP + ERROR, attempting ack.\n", slave);
-							ec_slave[slave].state = (EC_STATE_SAFE_OP + EC_STATE_ACK);
-							ec_writestate(slave);
-						}
-						else if (ec_slave[slave].state == EC_STATE_SAFE_OP)
-						{
-							printf("WARNING : slave %d is in SAFE_OP, change to OPERATIONAL.\n", slave);
-							ec_slave[slave].state = EC_STATE_OPERATIONAL;
-							ec_writestate(slave);
-						}
-						else if (ec_slave[slave].state > EC_STATE_NONE)
-						{
-							if (ec_reconfig_slave(slave, EC_TIMEOUTMON))
-							{
-								ec_slave[slave].islost = FALSE;
-								printf("MESSAGE : slave %d reconfigured\n", slave);
-							}
-						}
-						else if (!ec_slave[slave].islost)
-						{
-							/* re-check state */
-							ec_statecheck(slave, EC_STATE_OPERATIONAL, EC_TIMEOUTRET);
-							if (ec_slave[slave].state == EC_STATE_NONE)
-							{
-								ec_slave[slave].islost = TRUE;
-								printf("ERROR : slave %d lost\n", slave);
-							}
-						}
+						printf("ERROR : slave %d is in SAFE_OP + ERROR, attempting ack.\n", slave);
+						ec_slave[slave].state = (EC_STATE_SAFE_OP + EC_STATE_ACK);
+						ec_writestate(slave);
 					}
-					if (ec_slave[slave].islost)
+					else if (ec_slave[slave].state == EC_STATE_SAFE_OP)
 					{
-						if (ec_slave[slave].state == EC_STATE_NONE)
-						{
-							if (ec_recover_slave(slave, EC_TIMEOUTMON))
-							{
-								ec_slave[slave].islost = FALSE;
-								printf("MESSAGE : slave %d recovered\n", slave);
-							}
-						}
-						else
+						printf("WARNING : slave %d is in SAFE_OP, change to OPERATIONAL.\n", slave);
+						ec_slave[slave].state = EC_STATE_OPERATIONAL;
+						ec_writestate(slave);
+					}
+					else if (ec_slave[slave].state > EC_STATE_NONE)
+					{
+						if (ec_reconfig_slave(slave, EC_TIMEOUTMON))
 						{
 							ec_slave[slave].islost = FALSE;
-							printf("MESSAGE : slave %d found\n", slave);
+							printf("MESSAGE : slave %d reconfigured\n", slave);
+						}
+					}
+					else if (!ec_slave[slave].islost)
+					{
+						/* re-check state */
+						ec_statecheck(slave, EC_STATE_OPERATIONAL, EC_TIMEOUTRET);
+						if (ec_slave[slave].state == EC_STATE_NONE)
+						{
+							ec_slave[slave].islost = TRUE;
+							printf("ERROR : slave %d lost\n", slave);
 						}
 					}
 				}
-				if (!ec_group[currentgroup].docheckstate)
-					;
-				printf("OK : all slaves resumed OPERATIONAL.\n");
+				if (ec_slave[slave].islost)
+				{
+					if (ec_slave[slave].state == EC_STATE_NONE)
+					{
+						if (ec_recover_slave(slave, EC_TIMEOUTMON))
+						{
+							ec_slave[slave].islost = FALSE;
+							printf("MESSAGE : slave %d recovered\n", slave);
+						}
+					}
+					else
+					{
+						ec_slave[slave].islost = FALSE;
+						printf("MESSAGE : slave %d found\n", slave);
+					}
+				}
 			}
-			osal_usleep(10000);
+			if (!ec_group[currentgroup].docheckstate)
+				;
+			printf("OK : all slaves resumed OPERATIONAL.\n");
 		}
+		osal_usleep(10000);
 	}
+}
 
-	/* main function*/
-	int main(int argc, char *argv[])
+/* main function*/
+int main(int argc, char *argv[])
+{
+	pcap_if_t *alldevs;
+	pcap_if_t *d;
+	int inum;
+	int i = 0;
+	// pcap_t *adhandle;
+	char errbuf[PCAP_ERRBUF_SIZE];
+
+	if (argc != 2 || atoi(argv[1]) < 100)
 	{
-		pcap_if_t *alldevs;
-		pcap_if_t *d;
-		int inum;
-		int i = 0;
-		// pcap_t *adhandle;
-		char errbuf[PCAP_ERRBUF_SIZE];
-
-		if (argc != 2 || atoi(argv[1]) < 100)
-		{
-			printf("Usage : app.exe [cycletime]\n Cycletime in microseconds >1000");
-			return (0);
-		}
-
-		dorun = 0;
-		cycleTime = atoi(argv[1]);
-
-		/* Load Npcap and its functions. */
-		if (!LoadNpcapDlls())
-		{
-			fprintf(stderr, "Couldn't load Npcap\n");
-			exit(1);
-		}
-
-		/* Retrieve the device list on the local machine */
-		if (pcap_findalldevs_ex(PCAP_SRC_IF_STRING, NULL, &alldevs, errbuf) == -1)
-		{
-			fprintf(stderr, "Error in pcap_findalldevs: %s\n", errbuf);
-			exit(1);
-		}
-
-		/* Print the list */
-		for (d = alldevs; d; d = d->next)
-		{
-			printf("%d. %s", ++i, d->name);
-			if (d->description)
-				printf(" (%s)\n", d->description);
-			else
-				printf(" (No description available)\n");
-		}
-
-		/* if no interface found*/
-		if (i == 0)
-		{
-			printf("\nNo interfaces found! Make sure Npcap is installed.\n");
-			return -1;
-		}
-
-		/* ask for user input*/
-		printf("Enter the interface number (1-%d):", i);
-		scanf_s("%d", &inum);
-
-		if (inum < 1 || inum > i)
-		{
-			printf("\nInterface number out of range.\n");
-			/* Free the device list */
-			pcap_freealldevs(alldevs);
-			return -1;
-		}
-
-		/* Jump to the selected adapter */
-		for (d = alldevs, i = 0; i < inum - 1; d = d->next, i++)
-			;
-
-		printf("SOEM (Simple Open EtherCAT Master)\nTest app\n");
-
-		/* create thread to handle slave error handling in OP */
-		// pthread_create( &thread1, NULL, (void *) &ecatcheck, (void*) &cycleTime);
-		osal_thread_create(&thread1, 128000, &ecatcheck, (void *)&ctime);
-		/* create RT thread */
-		osal_thread_create_rt(&thread2, stack64k * 2, &ecatthread, (void *)&cycleTime);
-		/* start cyclic part */
-		simpletest(d->name);
-
-		printf("End program\n");
+		printf("Usage : app.exe [cycletime]\n Cycletime in microseconds >1000");
 		return (0);
 	}
 
-	/* Callback function invoked by libpcap for every incoming packet (not used yet)*/
-	void packet_handler(u_char * param, const struct pcap_pkthdr *header, const u_char *pkt_data)
-	{
-		struct tm ltime;
-		char timestr[16];
-		time_t local_tv_sec;
+	dorun = 0;
+	cycleTime = atoi(argv[1]);
 
-		/*
+	/* Load Npcap and its functions. */
+	if (!LoadNpcapDlls())
+	{
+		fprintf(stderr, "Couldn't load Npcap\n");
+		exit(1);
+	}
+
+	/* Retrieve the device list on the local machine */
+	if (pcap_findalldevs_ex(PCAP_SRC_IF_STRING, NULL, &alldevs, errbuf) == -1)
+	{
+		fprintf(stderr, "Error in pcap_findalldevs: %s\n", errbuf);
+		exit(1);
+	}
+
+	/* Print the list */
+	for (d = alldevs; d; d = d->next)
+	{
+		printf("%d. %s", ++i, d->name);
+		if (d->description)
+			printf(" (%s)\n", d->description);
+		else
+			printf(" (No description available)\n");
+	}
+
+	/* if no interface found*/
+	if (i == 0)
+	{
+		printf("\nNo interfaces found! Make sure Npcap is installed.\n");
+		return -1;
+	}
+
+	/* ask for user input*/
+	printf("Enter the interface number (1-%d):", i);
+	scanf_s("%d", &inum);
+
+	if (inum < 1 || inum > i)
+	{
+		printf("\nInterface number out of range.\n");
+		/* Free the device list */
+		pcap_freealldevs(alldevs);
+		return -1;
+	}
+
+	/* Jump to the selected adapter */
+	for (d = alldevs, i = 0; i < inum - 1; d = d->next, i++)
+		;
+
+	printf("SOEM (Simple Open EtherCAT Master)\nTest app\n");
+
+	/* create thread to handle slave error handling in OP */
+	// pthread_create( &thread1, NULL, (void *) &ecatcheck, (void*) &cycleTime);
+	osal_thread_create(&thread1, 128000, &ecatcheck, (void *)&ctime);
+	/* create RT thread */
+	osal_thread_create_rt(&thread2, stack64k * 2, &ecatthread, (void *)&cycleTime);
+	/* start cyclic part */
+	simpletest(d->name);
+
+	printf("End program\n");
+	return (0);
+}
+
+/* Callback function invoked by libpcap for every incoming packet (not used yet)*/
+void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data)
+{
+	struct tm ltime;
+	char timestr[16];
+	time_t local_tv_sec;
+
+	/*
 	 * unused variables
 	 */
-		(VOID)(param);
-		(VOID)(pkt_data);
+	(VOID)(param);
+	(VOID)(pkt_data);
 
-		/* convert the timestamp to readable format */
-		local_tv_sec = header->ts.tv_sec;
-		localtime_s(&ltime, &local_tv_sec);
-		strftime(timestr, sizeof timestr, "%H:%M:%S", &ltime);
+	/* convert the timestamp to readable format */
+	local_tv_sec = header->ts.tv_sec;
+	localtime_s(&ltime, &local_tv_sec);
+	strftime(timestr, sizeof timestr, "%H:%M:%S", &ltime);
 
-		printf("%s,%.6d len:%d\n", timestr, header->ts.tv_usec, header->len);
-	}
+	printf("%s,%.6d len:%d\n", timestr, header->ts.tv_usec, header->len);
+}

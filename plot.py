@@ -73,7 +73,7 @@ def csv_parser(csvin):
         if row['Data'] != '':
             pdoData = row['Data']
         
-        if row['Working Cnt'] != '' and int(row['Working Cnt'].split(',')[0],10) == 12 and int(pdoData[:1],16) != 0:
+        if row['Working Cnt'] != '' and int(row['Working Cnt'].split(',')[0],10) == 12 and int(pdoData[:7],16) != 00:
             pdoData = row['Data']
             if pdoData != '':
                 pdoDataBa = (bytearray.fromhex(pdoData[:8]))
@@ -82,7 +82,9 @@ def csv_parser(csvin):
                 outpdo.append(int(pdoData,base=16))
                 if int(pdoData,16) > (prevvalue+2) and prevvalue!=0:
                     missedVal +=1
-                    print("lost",row['Time'])
+                    # print(int(pdoData,16))
+                    # print(prevvalue)
+                    print("lost",row['No.'])
             else:
                 outpdo.append(0)
             if row['DC SysTime (0x910)'] != '':
@@ -96,23 +98,38 @@ def csv_parser(csvin):
             timeInSec.append(float(row["Time"]))
             prevtime = float(row["Time"])
             prevvalue = int(pdoData,base=16)
+
     return framesCount,missedVal,equalTime
 
 def time_calc():
     # time is 0 at start of csv
     intialtime = ec_DCtime[0]
+    prev = 0
+    fc = 0 
+    over = 0
     for i,j in enumerate(timeInSec[:-1]):
         cycleTime.append(timeInSec[i+1]-j)
+        if timeInSec[i+1]-j > 0.05:
+            over+=1
         #print(ec_DCtime[i+1]-j)
+        
+        if j-prev > 1:
+            #print(j-prev)
+            debit.append(nbOfbytes[i]*fc/(j-prev))
+            prev=j
+            fc=0
+        else:
+            fc+=1
+    print(over)
 
-    # time btw 2 frames
-    # for x,y in enumerate(timeInSec[:-1]):
-    #     debit.append(nbOfbytes[x]/(timeInSec[x+1]-timeInSec[x]))
-    x = 0
-    step = 100
-    while x<len(timeInSec) - step:
-         debit.append(nbOfbytes[x]*step/(timeInSec[x+step]-timeInSec[x]))
-         x += step
+
+
+    # x = 0
+    # step = 0
+    # while x<len(timeInSec) - step:
+        
+    #      debit.append(nbOfbytes[x]*step/(timeInSec[x+step]-timeInSec[x]))
+    #      x += step
 
     # calculate nb of frames until PDO iteration
     n = 0

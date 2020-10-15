@@ -31,7 +31,7 @@ def plot_results():
     ax3 = pyplot.subplot(212)
     ax3.set_ylabel("Debit")
     ax3.grid(True)
-    ax3.scatter(numpy.linspace(0,len(debit),len(debit)),debit)
+    ax3.plot(numpy.linspace(0,len(debit),len(debit)),debit)
     pyplot.show()
     
 
@@ -69,8 +69,11 @@ def csv_parser(csvin):
     prevtime = 0
     for row in allData:
         framesCount += 1
-        pdoData = row['Data']
-        if int(row['Working Cnt'].split(',')[0],10) == 12 and int(pdoData[:1],16) != 0:
+
+        if row['Data'] != '':
+            pdoData = row['Data']
+        
+        if row['Working Cnt'] != '' and int(row['Working Cnt'].split(',')[0],10) == 12 and int(pdoData[:1],16) != 0:
             pdoData = row['Data']
             if pdoData != '':
                 pdoDataBa = (bytearray.fromhex(pdoData[:8]))
@@ -79,7 +82,7 @@ def csv_parser(csvin):
                 outpdo.append(int(pdoData,base=16))
                 if int(pdoData,16) > (prevvalue+2) and prevvalue!=0:
                     missedVal +=1
-                    #print("lost")
+                    print("lost",row['Time'])
             else:
                 outpdo.append(0)
             if row['DC SysTime (0x910)'] != '':
@@ -89,7 +92,7 @@ def csv_parser(csvin):
             nbOfbytes.append(int(row['Length']))
             if float(row["Time"]) == prevtime:
                 equalTime += 1
-                print("equal", float(row["Time"]))
+                #print("equal", float(row["Time"]))
             timeInSec.append(float(row["Time"]))
             prevtime = float(row["Time"])
             prevvalue = int(pdoData,base=16)
@@ -98,14 +101,15 @@ def csv_parser(csvin):
 def time_calc():
     # time is 0 at start of csv
     intialtime = ec_DCtime[0]
-    for i,j in enumerate(ec_DCtime[:-1]):
-        cycleTime.append(ec_DCtime[i+1]-j)
+    for i,j in enumerate(timeInSec[:-1]):
+        cycleTime.append(timeInSec[i+1]-j)
+        #print(ec_DCtime[i+1]-j)
 
     # time btw 2 frames
     # for x,y in enumerate(timeInSec[:-1]):
     #     debit.append(nbOfbytes[x]/(timeInSec[x+1]-timeInSec[x]))
     x = 0
-    step = 2
+    step = 100
     while x<len(timeInSec) - step:
          debit.append(nbOfbytes[x]*step/(timeInSec[x+step]-timeInSec[x]))
          x += step

@@ -23,6 +23,8 @@
 #define EC_TIMEOUTMON 500
 #define stack64k (64 * 1024)
 #define print_num 100000
+#define getSize(x) (sizeof(x) / sizeof(x[0]))
+
 //#define PRINT_OUT
 //#define PRINT_PDO
 
@@ -55,6 +57,10 @@ int64 t1, t2;
 int64 real_cycle;
 int64 prev_real_cycle;
 int64 jitt;
+int mbxsize = 128;
+uint8 txbuf[128] = {0};
+uint8 rxbuf[128] = {0};
+uint8 buftosend[1000000] = {0};
 
 int nbOfFilesOut = 0;
 
@@ -176,33 +182,23 @@ void makeHeader(uint8_t *mbx, uint16_t length, int slave)
 	mbx[4] = type;
 }
 
-uint8* split_buffer(uint8* buffer,int maxsize)
-{	
-	uint8* rx = malloc(maxsize);
-	int start = 0;
-	int splitting = 0;
-	for(int i = 0; i< sizeof(buffer);i++)
-	{
-		if(buffer[i] != 0)
-		{
-			if(i<(start+128))
-			{
-				rx[i] = buffer[i];
-				buffer[i] = 0;
-				splitting = 1;
-			} 
-			else 
-			{
-				return rx;
-			}
-		} 
-		else if (!splitting)
-		{
-			start++;
-		}
-	}
-	return rx;
-}
+// int split_buffer(uint8* tosend,uint8* buffer[],int sizeofbuf,int maxsize,int count)
+// {
+
+// 	for(int i = count; i< count+maxsize-1;i++)
+// 	{
+// 		if(buffer[i] != 0x0A)
+// 		{
+// 			tosend[i]  = buffer[i];
+// 			buffer[i]  = 0x00;
+// 		}
+// 		else
+// 		{
+// 			return 0;
+// 		}
+// 	}
+// 	return 1;
+// }
 
 OSAL_THREAD_FUNC mailbox_reader(void *lpParam)
 {
@@ -210,10 +206,14 @@ OSAL_THREAD_FUNC mailbox_reader(void *lpParam)
 	int mbxWkc;
 	ec_mbxbuft MbxIn;
 	ec_mbxheadert *MbxHdr = (ec_mbxheadert *)MbxIn;
-	uint8 txbuf[128];
-	uint8* rxbuf;
-	uint8* buftosend;
-
+	int tpsClc = cycleTime;
+	int count = 0;
+	int finished = 0;
+	char str[] = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec viverra tortor felis, in semper libero accumsan at. Donec vitae quam sit amet dolor luctus lobortis vitae at enim. Nunc maximus ultricies urna. Nullam suscipit elit quis nunc maximus, a sollicitudin augue rutrum. Etiam egestas justo velit, vulputate dignissim velit cursus in. Cras eleifend dictum risus eu vestibulum. Phasellus at ipsum molestie, suscipit turpis eget, mattis enim. Cras eget hendrerit ligula, et pretium leo. Curabitur euismod eget lectus sed hendrerit. Sed molestie faucibus arcu, vel malesuada orci feugiat semper. Curabitur consectetur diam volutpat maximus sollicitudin. Morbi lobortis blandit ex, eu blandit justo condimentum at. Nullam enim dui, placerat ac gravida ac, iaculis et ante. Integer pharetra mattis rhoncus. Curabitur vitae velit et risus venenatis auctor. Aenean non ipsum vel velit convallis dictum quis lobortis risus. Cras quam lectus, eleifend sit amet lectus et, viverra condimentum velit justo.\n";
+	for (int i = 0; i < sizeof(str); i++)
+	{
+		buftosend[i] = (uint8)str[i];
+	}
 	//ec_mbxheadert * MbxHdr = (ec_mbxheadert *) MbxIn;
 
 	//    MbxHdr->address = ec_slave[1].aliasadr;
@@ -223,31 +223,63 @@ OSAL_THREAD_FUNC mailbox_reader(void *lpParam)
 	// 	MbxHdr = (ec_mbxheadert *) MbxIn;
 	// 	MbxHdr = (ec_mbxheadert *) txbuf;
 
-
 	for (;;)
-	{	
-		if(sizeof(buftosend)>128)
-		{
-			rxbuf = split_buffer(buftosend,128);
-		}
-		makeHeader(txbuf, sizeof(txbuf) - 6, 1);
-		/******** SEND *******/
+	{
 
-		mbxWkc = ecx_mbxsend(context, 1, (ec_mbxbuft *)txbuf, EC_TIMEOUTRXM);
-		if (mbxWkc < 1)
+		while (!finished)
 		{
-			printf("Error mbxWkc = %d\n", mbxWkc);
-		}
+			for (int i = count; i < count + mbxsize - 1; i++)
+			{
+				
+				if (buftosend[i] != 0x0A)
+				{
+					txbuf[i-count] = buftosend[i];
+					
+					buftosend[i] = 0x00;
+				}
+				else
+				{
+					finished = 1;
+					count = 0;
+				}
+			}
 
-		/******* RECEIVE ******/
-		mbxWkc = ecx_mbxreceive(context, 1, (ec_mbxbuft *)&rxbuf, EC_TIMEOUTRXM);
-		printf("Wkc : %d", mbxWkc);
-		for (int j = 0; j < sizeof(rxbuf); j++)
-		{
-			printf("MbxIn[%d] = %x \n", j, rxbuf[j]);
+			if (count < (getSize(buftosend) - 128))
+			{
+				count += 128;
+			}
+			else
+			{
+				count = 0;
+			}
+			//makeHeader(txbuf,(uint16_t) sizeof(txbuf) - 6, 1);
+			/******** SEND *******/
+
+			printf("\n");
+			mbxWkc = ecx_mbxsend(context, 1, (ec_mbxbuft *)txbuf, EC_TIMEOUTRXM);
+			for (int i = 0; i < getSize(txbuf); i++)
+			{
+				printf("%c", txbuf[i]);
+			}
+			if (mbxWkc < 1)
+			{
+				printf("Error mbxWkc = %d\n", mbxWkc);
+			}
+			osal_usleep(20 * tpsClc);
+			/******* RECEIVE ******/
+			mbxWkc = ecx_mbxreceive(context, 1, (ec_mbxbuft *)&rxbuf, EC_TIMEOUTRXM);
+			//printf("Wkc : %d", mbxWkc);
+			for (int j = 0; j < sizeof(rxbuf); j++)
+			{
+				printf("%c", rxbuf[j]);
+			}
+			printf("\n");
+			osal_usleep(1000 * tpsClc);
 		}
-		osal_usleep(10000 * 1000);
-		
+		// for(int i = 0; i< sizeof(buftosend);i++)
+		// 	{
+		// 		buftosend[i] = 0;
+		// 	}
 	}
 }
 
@@ -492,7 +524,7 @@ void capture_and_save()
 	real_cycle = t1 - t2;
 	t2 = ec_DCtime;
 	if (dorun < (print_num + nbOfFilesOut * print_num))
-	{
+	{	
 		stream1[dorun - (print_num * nbOfFilesOut)] = real_cycle;
 		stream2[dorun - (print_num * nbOfFilesOut)] = toff;
 		stream3[dorun - (print_num * nbOfFilesOut)] = inData;
@@ -550,7 +582,7 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 			if (ec_slave[1].hasdc)
 			{
 				/* calulate toff to get linux time and DC synced */
-				printf("%d\n", toff);
+
 				ec_sync(ec_DCtime, cycletime, &toff);
 			}
 			ec_send_processdata();

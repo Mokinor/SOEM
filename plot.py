@@ -23,15 +23,19 @@ cycleTime = []
 def plot_results():
     """plot data"""
     print('plotting')
-    fig = pyplot.figure()
-    ax1 = pyplot.subplot(211)
-    ax1.set_ylabel("Trames entre 2 itérations de TxPDO")
-    ax1.grid(True)
-    ax1.scatter(numpy.linspace(0,len(cycleTime),len(cycleTime)),cycleTime,marker='x')
-    ax3 = pyplot.subplot(212)
-    ax3.set_ylabel("Debit")
-    ax3.grid(True)
-    ax3.plot(numpy.linspace(0,len(debit),len(debit)),debit)
+    fig = pyplot.figure(1)
+    
+    ax1 = pyplot.axes()
+    ax1.set(xlabel='n° cylce', ylabel='Temps de cycle (s)',
+       title='Evolution du temps de cycle')
+    ax1.grid()
+    ax1.scatter(numpy.linspace(0,len(cycleTime),len(cycleTime)),cycleTime,marker='.',s=1,color ="b")
+    fig2 = pyplot.figure(2)
+    ax3 = pyplot.axes()
+    ax3.set(xlabel='Temps(s)', ylabel='Débit (Octets/s)',
+       title='Débit total')
+    ax3.grid()
+    ax3.plot(numpy.linspace(0,len(debit),len(debit)),debit,color ="b")
     pyplot.show()
     
 
@@ -80,17 +84,17 @@ def csv_parser(csvin):
                 pdoDataBa.reverse()
                 pdoData = pdoDataBa.hex()
                 outpdo.append(int(pdoData,base=16))
-                if int(pdoData,16) > (prevvalue+2) and prevvalue!=0:
+                if int(pdoData,16) > (prevvalue+1) and prevvalue!=0:
                     missedVal +=1
                     # print(int(pdoData,16))
                     # print(prevvalue)
                     print("lost",row['No.'])
             else:
                 outpdo.append(0)
-            if row['DC SysTime (0x910)'] != '':
-                ec_DCtime.append(int(row['DC SysTime (0x910)'],base=16)/1e9)
-            else:
-                ec_DCtime.append(0)
+            # if row['DC SysTime (0x910)'] != '':
+            #     ec_DCtime.append(int(row['DC SysTime (0x910)'],base=16)/1e9)
+            # else:
+            #     ec_DCtime.append(0)
             nbOfbytes.append(int(row['Length']))
             if float(row["Time"]) == prevtime:
                 equalTime += 1
@@ -103,7 +107,6 @@ def csv_parser(csvin):
 
 def time_calc():
     # time is 0 at start of csv
-    intialtime = ec_DCtime[0]
     prev = 0
     fc = 0 
     over = 0

@@ -27,6 +27,7 @@
 
 //#define PRINT_OUT
 //#define PRINT_PDO
+#define MBXCOM
 
 /*	Variable declarations	*/
 long NSEC_PER_SEC = 1000000000i64;
@@ -235,7 +236,7 @@ OSAL_THREAD_FUNC mailbox_reader(void *lpParam)
 				{
 					txbuf[i-count] = buftosend[i];
 					
-					buftosend[i] = 0x00;
+					//buftosend[i] = 0x00;
 				}
 				else
 				{
@@ -274,8 +275,10 @@ OSAL_THREAD_FUNC mailbox_reader(void *lpParam)
 				printf("%c", rxbuf[j]);
 			}
 			printf("\n");
-			osal_usleep(1000 * tpsClc);
+			osal_usleep(20 * tpsClc);
 		}
+		osal_usleep(50000 * tpsClc);
+		finished = 0;
 		// for(int i = 0; i< sizeof(buftosend);i++)
 		// 	{
 		// 		buftosend[i] = 0;
@@ -322,9 +325,10 @@ void simpletest(char *ifname) //ifname name of interface
 			/* wait for all slaves to reach SAFE_OP state */
 			ec_statecheck(0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE * 4);
 
+#ifdef MBXCOM
 			/*launch mailbox handler thread*/
 			osal_thread_create(&thread3, 128000, &mailbox_reader, &ecx_context);
-
+#endif
 			/* Print number of segments/branches in network*/
 
 			printf("segments : %d : %d %d %d %d\n", ec_group[0].nsegments, ec_group[0].IOsegment[0], ec_group[0].IOsegment[1], ec_group[0].IOsegment[2], ec_group[0].IOsegment[3]);
@@ -558,7 +562,7 @@ OSAL_THREAD_FUNC_RT ecatthread(void *ptr)
 	while (1)
 	{
 
-		osal_usleep((cycletime + toff) / 1000);
+		osal_usleep((uint32)(cycletime + toff) / 1000);
 		if (dorun > 0)
 		{
 			globalWkc = ec_receive_processdata(EC_TIMEOUTRET);

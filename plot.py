@@ -17,6 +17,7 @@ outpdo = []
 infoStr = ""
 nbOfbytes = []
 inpdo = []
+jitter = []
 equalTime = 0
 missedVal = 0
 cycleTime = []
@@ -26,7 +27,7 @@ def plot_results():
     fig = pyplot.figure(1)
     
     ax1 = pyplot.axes()
-    ax1.set(xlabel='n° cylce', ylabel='Temps de cycle (s)',
+    ax1.set(xlabel='n° cycle', ylabel='Temps de cycle (s)',
        title='Evolution du temps de cycle')
     ax1.grid()
     ax1.scatter(numpy.linspace(0,len(cycleTime),len(cycleTime)),cycleTime,marker='.',s=1,color ="b")
@@ -36,6 +37,12 @@ def plot_results():
        title='Débit total')
     ax3.grid()
     ax3.plot(numpy.linspace(0,len(debit),len(debit)),debit,color ="b")
+    fig3 = pyplot.figure(3)
+    ax4 = pyplot.axes()
+    ax4.set(xlabel='n° cylce', ylabel='jitter (ms)',
+       title='Jitter')
+    ax4.grid()
+    ax4.plot(numpy.linspace(0,len(jitter),len(jitter)),jitter,color ="b")
     pyplot.show()
     
 
@@ -115,6 +122,8 @@ def time_calc():
         if timeInSec[i+1]-j > 0.05:
             over+=1
         #print(ec_DCtime[i+1]-j)
+    for i,j in enumerate(cycleTime[:-1]):
+        jitter.append((cycleTime[i+1]-j))
         
         if j-prev > 1:
             #print(j-prev)

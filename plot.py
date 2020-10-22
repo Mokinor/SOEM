@@ -95,7 +95,7 @@ def csv_parser(csvin):
                     missedVal +=1
                     # print(int(pdoData,16))
                     # print(prevvalue)
-                    print("lost",row['No.'])
+                    #print("lost",row['No.'])
             else:
                 outpdo.append(0)
             # if row['DC SysTime (0x910)'] != '':
@@ -118,12 +118,11 @@ def time_calc():
     fc = 0 
     over = 0
     for i,j in enumerate(timeInSec[:-1]):
-        cycleTime.append(timeInSec[i+1]-j)
-        if timeInSec[i+1]-j > 0.05:
-            over+=1
+        
+        if timeInSec[i+1]-j < 0.5:
+            cycleTime.append(timeInSec[i+1]-j)
         #print(ec_DCtime[i+1]-j)
-    for i,j in enumerate(cycleTime[:-1]):
-        jitter.append((cycleTime[i+1]-j))
+    
         
         if j-prev > 1:
             #print(j-prev)
@@ -132,6 +131,8 @@ def time_calc():
             fc=0
         else:
             fc+=1
+    for i,j in enumerate(cycleTime[:-1]):
+        jitter.append((cycleTime[i+1]-j))
     print(over)
 
 

@@ -27,7 +27,7 @@
 
 //#define PRINT_OUT
 //#define PRINT_PDO
-#define MBXCOM
+//#define MBXCOM
 
 /*	Variable declarations	*/
 long NSEC_PER_SEC = 1000000000i64;
@@ -458,7 +458,7 @@ void ec_sync(long long reftime, long cycletime, long *offsettime)
 	static long integral = 0;
 	long delta;
 	/* set linux sync point 500us later than DC sync, just as example */
-	delta = (reftime - 500000) % cycletime;
+	delta = reftime % cycletime;
 	if (delta > (cycletime / 2))
 	{
 		delta = delta - cycletime;
